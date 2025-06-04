@@ -1,0 +1,15 @@
+[submodule "extern/LidarDecode"]
+	path = extern/LidarDecode
+	url = https://github.com/khalisfadil/LidarDecode.git
+[submodule "extern/FinalStateEstimation"]
+	path = extern/FinalStateEstimation
+	url = https://github.com/khalisfadil/FinalStateEstimation.git
+[submodule "extern/FinalICP"]
+	path = extern/FinalICP
+	url = https://github.com/khalisfadil/FinalICP.git
+[submodule "extern/liegroupMath"]
+	path = extern/liegroupMath
+	url = https://github.com/khalisfadil/liegroupMath.git
+[submodule "3rdparty/robin-map"]
+	path = 3rdparty/robin-map
+	url = https://github.com/Tessil/robin-map.git
