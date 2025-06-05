@@ -13,6 +13,6 @@
 [submodule "3rdparty/robin-map"]
 	path = 3rdparty/robin-map
 	url = https://github.com/Tessil/robin-map.git
-[submodule "GNSSKompass"]
-	path = GNSSKompass
+[submodule "extern/GNSSKompass"]
+	path = extern/GNSSKompass
 	url = https://github.com/khalisfadil/GNSSKompass.git
