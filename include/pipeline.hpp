@@ -12,6 +12,8 @@
 #include <chrono>
 #include <Eigen/Dense>
 
+#include <UdpSocket.hpp>
+
 #include <LidarDataframe.hpp>
 #include <LidarIMUDataFrame.hpp>
 
@@ -25,33 +27,38 @@ class SLAMPipeline {
         static std::atomic<bool> running_;
         static std::condition_variable globalCV_;
         static boost::lockfree::spsc_queue<LidarDataFrame, boost::lockfree::capacity<128>> decodedPoint_buffer_;
-        static boost::lockfree::spsc_queue<LidarIMUDataFrame, boost::lockfree::capacity<128>> decodedLidarIMU_buffer_;
+        static boost::lockfree::spsc_queue<std::vector<LidarIMUDataFrame>, boost::lockfree::capacity<128>> decodedLidarIMU_buffer_;
 
-        SLAMPipeline(const std::string& odom_json_path, const std::string& lidar_json_path); // Constructor with JSON file path
-        SLAMPipeline(const nlohmann::json& odom_json_data, const nlohmann::json& lidar_json_data); // Constructor with JSON data
+        explicit SLAMPipeline(const std::string& odom_json_path, const std::string& lidar_json_path); // Constructor with JSON file path
     
         static void signalHandler(int signal);
         void setThreadAffinity(const std::vector<int>& coreIDs);
 
-        //### application function
+        //### application listener
         void runOusterLidarListenerSingleReturn(boost::asio::io_context& ioContext, const std::string& host, uint16_t port, uint32_t bufferSize, const std::vector<int>& allowedCores);
         void runOusterLidarListenerLegacy(boost::asio::io_context& ioContext, const std::string& host, uint16_t port, uint32_t bufferSize, const std::vector<int>& allowedCores);  
         void runOusterLidarIMUListener(boost::asio::io_context& ioContext, const std::string& host, uint16_t port, uint32_t bufferSize, const std::vector<int>& allowedCores); 
         void runGnssCompassListener(boost::asio::io_context& ioContext, const std::string& host, uint16_t port, uint32_t bufferSize, const std::vector<int>& allowedCores); 
 
-        struct SLAMconfig {
-            std::string output_dir = "./outputs";
-            stateestimate::lidarinertialodom::Options config_param;
-        };
-
-        SLAMconfig parse_metadata(const json& json_data);
-
+        // application for slam
+        void dataAlignment(const std::vector<int>& allowedCores);
+        void runLioStateEstimation(const std::vector<int>& allowedCores);
     private:
+
+        std::mutex consoleMutex;
+
+        // finalState
+        stateestimate::lidarinertialodom lioOdometry;
 
         // runOusterLidarListener
         OusterLidarCallback lidarCallback;
         uint16_t frame_id_= 0;
         LidarDataFrame frame_data_copy_;
+
+        // runOusterLidarIMUListener
+        LidarIMUDataFrame frame_data_IMU_copy;
+        std::vector<LidarIMUDataFrame> frame_buffer_IMU_vec;
+        const size_t VECTOR_SIZE_IMU = 15;
 
         // runOusterLidarIMUListener
         uint64_t Accelerometer_Read_Time_ = 0.0;
