@@ -43,6 +43,10 @@ class SLAMPipeline {
         // application for slam
         void dataAlignment(const std::vector<int>& allowedCores);
         void runLioStateEstimation(const std::vector<int>& allowedCores);
+        
+        // application for DynamicMapping
+        void runDynamicMapping(const std::vector<int>& allowedCores);
+        
     private:
 
         std::mutex consoleMutex;
@@ -61,7 +65,6 @@ class SLAMPipeline {
         const size_t VECTOR_SIZE_IMU = 15;
 
         // runOusterLidarIMUListener
-        uint64_t Accelerometer_Read_Time_ = 0.0;
-        uint64_t Gyroscope_Read_Time_ = 0.0;
+        uint64_t Normalized_Timestamp_s_ = 0.0;
 
 }; // namespace SLAMPipeline

@@ -264,13 +264,10 @@ void SLAMPipeline::runOusterLidarIMUListener(boost::asio::io_context& ioContext,
             lidarCallback.decode_packet_LidarIMU(packet_data, frame_data_IMU_copy);
 
             // Check if the frame is valid
-            if (frame_data_IMU_copy.Accelerometer_Read_Time > 0 && 
-                frame_data_IMU_copy.Gyroscope_Read_Time > 0 && 
-                frame_data_IMU_copy.Accelerometer_Read_Time != this->Accelerometer_Read_Time_ && 
-                frame_data_IMU_copy.Gyroscope_Read_Time != this->Gyroscope_Read_Time_) {
+            if (frame_data_IMU_copy.Normalized_Timestamp_s > 0 && 
+                frame_data_IMU_copy.Normalized_Timestamp_s != this->Normalized_Timestamp_s_ ) {
 
-                this->Accelerometer_Read_Time_ = frame_data_IMU_copy.Accelerometer_Read_Time;
-                this->Gyroscope_Read_Time_ = frame_data_IMU_copy.Gyroscope_Read_Time;
+                this->Normalized_Timestamp_s_ = frame_data_IMU_copy.Normalized_Timestamp_s;
 
                 // If the vector is full, remove the oldest frame
                 if (frame_buffer_IMU_vec.size() >= VECTOR_SIZE_IMU) {
@@ -344,7 +341,10 @@ void SLAMPipeline::dataAlignment(const std::vector<int>& allowedCores){
     while (running_.load(std::memory_order_acquire)) {
         try {
             // If no lidar data is available, wait briefly and retry
-            if (decodedPoint_buffer_.empty()) {continue;}
+            if (decodedPoint_buffer_.empty()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
 
             LidarDataFrame temp_LidarData;
             if (!decodedPoint_buffer_.pop(temp_LidarData)) {
@@ -375,7 +375,7 @@ void SLAMPipeline::dataAlignment(const std::vector<int>& allowedCores){
 
             // Loop to find an IMU vector that aligns with the current lidar frame
             bool aligned = false;
-            while (!decodedLidarIMU_buffer_.empty() && !aligned){
+            while (!aligned){
                 std::vector<LidarIMUDataFrame> temp_LidarIMUDataVec;
                 if (!decodedLidarIMU_buffer_.pop(temp_LidarIMUDataVec)) {
                     std::lock_guard<std::mutex> lock(consoleMutex);
@@ -391,14 +391,47 @@ void SLAMPipeline::dataAlignment(const std::vector<int>& allowedCores){
                     continue;
                 }
 
+                // find min/max
+                double min_imu_time = temp_LidarIMUDataVec.front().Normalized_Timestamp_s;
+                double max_imu_time = temp_LidarIMUDataVec.back().Normalized_Timestamp_s;
+
+                // Verify IMU timestamps are valid and ordered
+                if (min_imu_time > max_imu_time) {
+                    std::lock_guard<std::mutex> lock(consoleMutex);
+                    std::cerr << "[Pipeline] DataAlignment: Invalid IMU timestamp range: min "
+                              << min_imu_time << " > max " << max_imu_time 
+                              << " for lidar frame ID " << temp_LidarData.frame_id << "." << std::endl;
+                    continue;
+                }
+
+                // Check if lidar timestamps are within IMU range
+                if (min_lidar_time >= min_imu_time && max_lidar_time <= max_imu_time) {
+                    // Timestamps are aligned; process the data
+                    aligned = true;
+                    std::lock_guard<std::mutex> lock(consoleMutex);
+                    std::cout << "[Pipeline] DataAlignment: Timestamps aligned for frame ID " 
+                              << temp_LidarData.frame_id << ". Lidar range: [" 
+                              << min_lidar_time << ", " << max_lidar_time << "], IMU range: ["
+                              << min_imu_time << ", " << max_imu_time << "]" << std::endl;
+                    // Add processing logic here (e.g., store aligned data, interpolate IMU, pass to lioOdometry)
+                    // todo>>
                 
-
+                } else if (min_lidar_time > min_imu_time && max_lidar_time > max_imu_time){
+                    // Lidar is too new or partially overlaps; pop another newer IMU vector >> skip while
+                    continue;
+                } else {
+                    // Lidar impossible to catch up with the IMU timestamp, need to discard this Lidar frame.
+                    // Potential Solution, increase the size buffer frame.
+                    std::lock_guard<std::mutex> lock(consoleMutex);
+                    std::cerr << "[Pipeline] DataAlignment: Lidar cannot catch up with IMU data, please increase Buffer size" << std::endl;
+                    break;
+                }
             }
-
-
-
         } catch (const std::exception& e) {
-
+            std::lock_guard<std::mutex> lock(consoleMutex);
+            std::cerr << "[Pipeline] DataAlignment: Exception occurred: " << e.what() << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
         }
     }
 }
@@ -415,6 +448,29 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
     }
 }
 
+// -----------------------------------------------------------------------------
+
+void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
+    setThreadAffinity(allowedCores);
+
+    try {
+
+    } catch (const std::exception& e) {
+
+    }
+}
+
+// -----------------------------------------------------------------------------
+
+void SLAMPipeline::runDynamicMapping(const std::vector<int>& allowedCores){
+    setThreadAffinity(allowedCores);
+
+    try {
+
+    } catch (const std::exception& e) {
+
+    }
+}
 
 
 
