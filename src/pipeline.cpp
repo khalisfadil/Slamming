@@ -4,14 +4,30 @@ using json = nlohmann::json;
 
 std::atomic<bool> SLAMPipeline::running_{true};
 std::condition_variable SLAMPipeline::globalCV_;
-boost::lockfree::spsc_queue<LidarDataFrame, boost::lockfree::capacity<128>> SLAMPipeline::decodedPoint_buffer_;
-boost::lockfree::spsc_queue<std::vector<LidarIMUDataFrame>, boost::lockfree::capacity<128>> SLAMPipeline::decodedLidarIMU_buffer_;
-
+boost::lockfree::spsc_queue<lidarDecode::LidarDataFrame, boost::lockfree::capacity<128>> SLAMPipeline::lidar_buffer_;
+boost::lockfree::spsc_queue<std::vector<lidarDecode::LidarIMUDataFrame>, boost::lockfree::capacity<128>> SLAMPipeline::imu_vec_buffer_;
+boost::lockfree::spsc_queue<lidarDecode::LidarIMUDataFrame, boost::lockfree::capacity<128>> SLAMPipeline::imu_buffer_;
+boost::lockfree::spsc_queue<SLAMPipeline::LidarIMUVecDataFrame, boost::lockfree::capacity<128>> SLAMPipeline::lidar_imu_buffer_;
+boost::lockfree::spsc_queue<std::string, boost::lockfree::capacity<128>> log_queue_;
 
 // -----------------------------------------------------------------------------
+
+void SLAMPipeline::logMessage(const std::string& level, const std::string& message) {
+    auto now = std::chrono::system_clock::now();
+    auto now_time_t = std::chrono::system_clock::to_time_t(now);
+    std::ostringstream oss;
+    oss << "[" << std::put_time(std::gmtime(&now_time_t), "%Y-%m-%dT%H:%M:%SZ") << "] "
+        << "[" << level << "] " << message << "\n";
+    if (!log_queue_.push(oss.str())) {
+        dropped_logs_.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+// -----------------------------------------------------------------------------
+
 SLAMPipeline::SLAMPipeline(const std::string& odom_json_path, const std::string& lidar_json_path) 
 : lioOdometry(odom_json_path), lidarCallback(lidar_json_path){
-    frame_buffer_IMU_vec.reserve(VECTOR_SIZE_IMU);
+    temp_IMU_vec_data_.reserve(VECTOR_SIZE_IMU);
 }
 
 // -----------------------------------------------------------------------------
@@ -54,95 +70,109 @@ void SLAMPipeline::setThreadAffinity(const std::vector<int>& coreIDs) {
 
 // -----------------------------------------------------------------------------
 
+void SLAMPipeline::processLogQueue(const std::string& filename, const std::vector<int>& allowedCores) {
+    setThreadAffinity(allowedCores); // Pin logging thread to specified cores
+
+    std::ofstream outfile(filename);
+    if (!outfile.is_open()) {
+        std::ostringstream oss;
+        oss << "[Logging] Error: Failed to open file " << filename << " for writing.\n";
+        std::cerr << oss.str(); // Fallback to cerr if file cannot be opened
+        return;
+    }
+
+    std::string message;
+    int lastReportedDrops = 0;
+    while (running_.load(std::memory_order_acquire)) {
+        if (log_queue_.pop(message)) {
+            outfile << message;
+            int currentDrops = dropped_logs_.load(std::memory_order_relaxed);
+            if (currentDrops > lastReportedDrops && (currentDrops - lastReportedDrops) >= 100) {
+                std::ostringstream oss;
+                oss << "[LOGGING] Warning: " << (currentDrops - lastReportedDrops) << " log messages dropped due to queue overflow.\n";
+                outfile << oss.str();
+                lastReportedDrops = currentDrops;
+            }
+        } else {
+            std::this_thread::yield();
+        }
+    }
+    while (log_queue_.pop(message)) {
+        outfile << message;
+    }
+    int finalDrops = dropped_logs_.load(std::memory_order_relaxed);
+    if (finalDrops > lastReportedDrops) {
+        outfile << "[LOGGING] Final report: " << (finalDrops - lastReportedDrops) << " log messages dropped.\n";
+    }
+
+    outfile.flush(); // Ensure data is written
+    outfile.close();
+}
+
+// -----------------------------------------------------------------------------
+
 void SLAMPipeline::runOusterLidarListenerSingleReturn(boost::asio::io_context& ioContext,
                                       const std::string& host,
                                       uint16_t port,
                                       uint32_t bufferSize,
                                       const std::vector<int>& allowedCores) {
     
-    setThreadAffinity(allowedCores); // Sets affinity for this listener thread
+    setThreadAffinity(allowedCores); 
 
     if (host.empty() || port == 0) {
-        std::lock_guard<std::mutex> lock(consoleMutex); // Protect std::cerr
-        std::cerr << "[SLAMPipeline] Listener: Invalid host or port. Host: " << host << ", Port: " << port << std::endl;
+        std::ostringstream oss;
+        oss << "Lidar Listener: Invalid host or port. Host: " << host << ", Port: " << port;
+        logMessage("ERROR", oss.str());    
         return;
     }
 
     try {
-    UdpSocket listener(ioContext, host, port,
-        // Lambda callback:
-        [&](const std::vector<uint8_t>& packet_data) {
-            // LidarDataFrame frame_data_copy; // 1. Local DataFrame created.
-                                       //    It will hold a deep copy of the lidar data.
 
-            // 2. lidarCallback processes the packet.
-            //    Inside decode_packet_single_return, frame_data_copy is assigned
-            //    (via DataFrame::operator=) the contents of lidarCallback's completed buffer.
-            //    This results in a deep copy into frame_data_copy.
-            lidarCallback.decode_packet_single_return(packet_data, frame_data_copy_);
+        UdpSocket listener(ioContext, host, port, [&](const std::vector<uint8_t>& packet_data) {
 
-            // 3. Now frame_data_copy is an independent, deep copy of the relevant frame.
-            //    We can safely use it and then move it into the queue.
-            if (frame_data_copy_.numberpoints > 0 && frame_data_copy_.frame_id != this->frame_id_) {
-                this->frame_id_ = frame_data_copy_.frame_id;
+            lidarCallback.decode_packet_single_return(packet_data, temp_lidar_data_);
+           
+            if (temp_lidar_data_.numberpoints > 0 && temp_lidar_data_.frame_id != this->frame_id_) {
+
+                this->frame_id_ = temp_lidar_data_.frame_id;
                 
-                // 4. Move frame_data_copy into the SPSC queue.
-                //    This transfers ownership of frame_data_copy's internal resources (vector data)
-                //    to the element constructed in the queue, avoiding another full copy.
-                //    frame_data_copy is left in a valid but unspecified (likely empty) state.
-                if (!decodedPoint_buffer_.push(std::move(frame_data_copy_))) {
-                    std::lock_guard<std::mutex> lock(consoleMutex);
-                    std::cerr << "[SLAMPipeline] Listener: SPSC buffer push failed for frame " 
-                              << this->frame_id_ // Use this->frame_id_ as frame_data_copy might be moved-from
-                              << ". Buffer Lidar Points might be full." << std::endl;
+                if (!lidar_buffer_.push(std::move(temp_lidar_data_))) {
+                    logMessage("WARNING", "Lidar Listener: SPSC Lidar buffer push failed.");  
                 }
             }
-            // frame_data_copy goes out of scope here. If it was moved, its destruction is trivial.
-            // If it was not pushed (e.g., due to condition not met), it's destructed normally (releasing its copied data).
-        }, // End of lambda
-        bufferSize);
+        }, bufferSize);
 
         // Main loop to run Asio's I/O event processing.
         while (running_.load(std::memory_order_acquire)) {
             try {
-                ioContext.run(); // This will block until work is done or ioContext is stopped.
-                                 // If it returns without an exception, it implies all work is done.
-                if (!running_.load(std::memory_order_acquire)) { // Check running_ again if run() returned cleanly
+                ioContext.run(); 
+                if (!running_.load(std::memory_order_acquire)) { 
                     break;
                 }
-                // If run() returns and there's still potentially work (or to handle stop signals),
-                // you might need to reset and run again, or break if shutting down.
-                // For a continuous listener, run() might not return unless stopped or an error occurs.
-                // If ioContext.run() returns because it ran out of work, and we are still 'running_',
-                // we should probably restart it if the intent is to keep listening.
-                // However, typically for a server/listener, io_context.run() is expected to block until stop() is called.
-                // If it returns prematurely, ensure io_context is reset if needed before next run() call.
-                // For this pattern, if run() returns, we break, assuming stop() was called elsewhere or an error occurred.
+               
                 break; 
             } catch (const std::exception& e) {
-                // Handle exceptions from ioContext.run()
-                std::lock_guard<std::mutex> lock(consoleMutex); // Protect std::cerr
-                std::cerr << "[SLAMPipeline] Listener: Exception in ioContext.run(): " << e.what() << std::endl;
+                 logMessage("WARNING", "Lidar Listener: Exception in ioContext."); 
+
                 if (running_.load(std::memory_order_acquire)) {
-                    ioContext.restart(); // Restart Asio io_context to attempt recovery.
-                    std::cerr << "[SLAMPipeline] Listener: ioContext restarted." << std::endl;
+                    ioContext.restart(); 
+                    logMessage("WARNING", "Lidar Listener: ioContext restarted.");
+
                 } else {
                     break; // Exit loop if shutting down.
                 }
             }
         }
     } catch(const std::exception& e){
-        // Handle exceptions from UdpSocket creation or other setup.
-        std::lock_guard<std::mutex> lock(consoleMutex); // Protect std::cerr
-        std::cerr << "[SLAMPipeline] Listener: Setup exception: " << e.what() << std::endl;
+        logMessage("WARNING", "Lidar Listener: Setup exception.");
     }
 
     // Ensure ioContext is stopped when the listener is done or an error occurs.
     if (!ioContext.stopped()) {
         ioContext.stop();
     }
-    std::lock_guard<std::mutex> lock(consoleMutex);
-    std::cerr << "[SLAMPipeline] Ouster LiDAR listener stopped." << std::endl;
+
+    logMessage("LOGGING", "Lidar Listener: listener stopped.");
 }
 
 // -----------------------------------------------------------------------------
@@ -153,89 +183,59 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
                                       uint32_t bufferSize,
                                       const std::vector<int>& allowedCores) {
     
-    setThreadAffinity(allowedCores); // Sets affinity for this listener thread
+    setThreadAffinity(allowedCores); 
 
     if (host.empty() || port == 0) {
-        std::lock_guard<std::mutex> lock(consoleMutex); // Protect std::cerr
-        std::cerr << "[SLAMPipeline] Listener: Invalid host or port. Host: " << host << ", Port: " << port << std::endl;
+        std::ostringstream oss;
+        oss << "Lidar Listener: Invalid host or port. Host: " << host << ", Port: " << port;
+        logMessage("ERROR", oss.str());      
         return;
     }
 
     try {
-        UdpSocket listener(ioContext, host, port,
-        // Lambda callback:
-        [&](const std::vector<uint8_t>& packet_data) {
-            // LidarDataFrame frame_data_copy; // 1. Local DataFrame created.
-                                       //    It will hold a deep copy of the lidar data.
+        UdpSocket listener(ioContext, host, port, [&](const std::vector<uint8_t>& packet_data) {
+           
+            lidarCallback.decode_packet_legacy(packet_data, temp_lidar_data_);
 
-            // 2. lidarCallback processes the packet.
-            //    Inside decode_packet_single_return, frame_data_copy is assigned
-            //    (via DataFrame::operator=) the contents of lidarCallback's completed buffer.
-            //    This results in a deep copy into frame_data_copy.
-            lidarCallback.decode_packet_legacy(packet_data, frame_data_copy_);
-
-            // 3. Now frame_data_copy is an independent, deep copy of the relevant frame.
-            //    We can safely use it and then move it into the queue.
-            if (frame_data_copy_.numberpoints > 0 && frame_data_copy_.frame_id != this->frame_id_) {
-                this->frame_id_ = frame_data_copy_.frame_id;
+            if (temp_lidar_data_.numberpoints > 0 && temp_lidar_data_.frame_id != this->frame_id_) {
+                this->frame_id_ = temp_lidar_data_.frame_id;
                 
-                // 4. Move frame_data_copy into the SPSC queue.
-                //    This transfers ownership of frame_data_copy's internal resources (vector data)
-                //    to the element constructed in the queue, avoiding another full copy.
-                //    frame_data_copy is left in a valid but unspecified (likely empty) state.
-                if (!decodedPoint_buffer_.push(std::move(frame_data_copy_))) {
-                    std::lock_guard<std::mutex> lock(consoleMutex);
-                    std::cerr << "[SLAMPipeline] Listener: SPSC buffer push failed for frame " 
-                              << this->frame_id_ // Use this->frame_id_ as frame_data_copy might be moved-from
-                              << ". Buffer Lidar Points might be full." << std::endl;
+                if (!lidar_buffer_.push(std::move(temp_lidar_data_))) {
+                    logMessage("WARNING", "Lidar Listener: SPSC Lidar buffer push failed.");    
                 }
             }
-            // frame_data_copy goes out of scope here. If it was moved, its destruction is trivial.
-            // If it was not pushed (e.g., due to condition not met), it's destructed normally (releasing its copied data).
-        }, // End of lambda
-        bufferSize);
+           
+        }, bufferSize);
 
-        // Main loop to run Asio's I/O event processing.
         while (running_.load(std::memory_order_acquire)) {
             try {
-                ioContext.run(); // This will block until work is done or ioContext is stopped.
-                                 // If it returns without an exception, it implies all work is done.
-                if (!running_.load(std::memory_order_acquire)) { // Check running_ again if run() returned cleanly
+                ioContext.run(); 
+                if (!running_.load(std::memory_order_acquire)) { 
                     break;
                 }
-                // If run() returns and there's still potentially work (or to handle stop signals),
-                // you might need to reset and run again, or break if shutting down.
-                // For a continuous listener, run() might not return unless stopped or an error occurs.
-                // If ioContext.run() returns because it ran out of work, and we are still 'running_',
-                // we should probably restart it if the intent is to keep listening.
-                // However, typically for a server/listener, io_context.run() is expected to block until stop() is called.
-                // If it returns prematurely, ensure io_context is reset if needed before next run() call.
-                // For this pattern, if run() returns, we break, assuming stop() was called elsewhere or an error occurred.
+                
                 break; 
             } catch (const std::exception& e) {
-                // Handle exceptions from ioContext.run()
-                std::lock_guard<std::mutex> lock(consoleMutex); // Protect std::cerr
-                std::cerr << "[SLAMPipeline] Listener: Exception in ioContext.run(): " << e.what() << std::endl;
+                logMessage("ERROR", "Lidar Listener: Exception in ioContext.");
+
                 if (running_.load(std::memory_order_acquire)) {
                     ioContext.restart(); // Restart Asio io_context to attempt recovery.
-                    std::cerr << "[SLAMPipeline] Listener: ioContext restarted." << std::endl;
+                    logMessage("LOGGING", "Lidar Listener: ioContext restarted.");
+
                 } else {
                     break; // Exit loop if shutting down.
                 }
             }
         }
     } catch(const std::exception& e){
-        // Handle exceptions from UdpSocket creation or other setup.
-        std::lock_guard<std::mutex> lock(consoleMutex); // Protect std::cerr
-        std::cerr << "[SLAMPipeline] Listener: Setup exception: " << e.what() << std::endl;
+        logMessage("ERROR", "Lidar Listener: Setup exception.");
     }
 
     // Ensure ioContext is stopped when the listener is done or an error occurs.
     if (!ioContext.stopped()) {
         ioContext.stop();
     }
-    std::lock_guard<std::mutex> lock(consoleMutex);
-    std::cerr << "[SLAMPipeline] Ouster LiDAR listener stopped." << std::endl;
+    logMessage("LOGGING", "Lidar Listener: listener stopped."); 
 }
 
 // -----------------------------------------------------------------------------
@@ -249,87 +249,72 @@ void SLAMPipeline::runOusterLidarIMUListener(boost::asio::io_context& ioContext,
     setThreadAffinity(allowedCores); // Sets affinity for this listener thread
 
     if (host.empty() || port == 0) {
-        std::lock_guard<std::mutex> lock(consoleMutex); // Protect std::cerr
-        std::cerr << "[Pipeline] Listener: Invalid host or port. Host: " << host << ", Port: " << port << std::endl;
+        std::ostringstream oss;
+        oss << "Lidar Listener: Invalid host or port. Host: " << host << ", Port: " << port;
+        logMessage("ERROR", oss.str());  
         return;
     }
 
     try {
-    UdpSocket listener(ioContext, host, port,
-        // Lambda callback:
-        [&](const std::vector<uint8_t>& packet_data) {
-            LidarIMUDataFrame frame_data_IMU_copy; // Local DataFrame created
+        UdpSocket listener(ioContext, host, port,[&](const std::vector<uint8_t>& packet_data) {
 
             // Decode the packet into frame_data_IMU_copy
-            lidarCallback.decode_packet_LidarIMU(packet_data, frame_data_IMU_copy);
+            lidarCallback.decode_packet_LidarIMU(packet_data, temp_IMU_data_);
 
             // Check if the frame is valid
-            if (frame_data_IMU_copy.Normalized_Timestamp_s > 0 && 
-                frame_data_IMU_copy.Normalized_Timestamp_s != this->Normalized_Timestamp_s_ ) {
+            if (temp_IMU_data_.Normalized_Timestamp_s > 0 && 
+                temp_IMU_data_.Normalized_Timestamp_s != this->Normalized_Timestamp_s_ ) {
 
-                this->Normalized_Timestamp_s_ = frame_data_IMU_copy.Normalized_Timestamp_s;
+                this->Normalized_Timestamp_s_ = temp_IMU_data_.Normalized_Timestamp_s;
 
                 // If the vector is full, remove the oldest frame
-                if (frame_buffer_IMU_vec.size() >= VECTOR_SIZE_IMU) {
-                    frame_buffer_IMU_vec.erase(frame_buffer_IMU_vec.begin()); // Remove the oldest element
+                if (temp_IMU_vec_data_.size() >= VECTOR_SIZE_IMU) {
+                    temp_IMU_vec_data_.erase(temp_IMU_vec_data_.begin()); // Remove the oldest element
                 }
 
                 // Push the new frame into the vector
-                frame_buffer_IMU_vec.push_back(frame_data_IMU_copy); // Deep copy into vector
+                temp_IMU_vec_data_.push_back(temp_IMU_data_); // Deep copy into vector
                 
                 // Push the copy into the SPSC queue
-                if (!decodedLidarIMU_buffer_.push(frame_buffer_IMU_vec)) {
-                    std::lock_guard<std::mutex> lock(consoleMutex);
-                    std::cerr << "[Pipeline] Listener: SPSC buffer push failed for frame. Buffer Lidar(IMU) might be full." << std::endl;
+                if (!imu_vec_buffer_.push(temp_IMU_vec_data_)) {
+                    logMessage("WARNING", "IMU Listener: SPSC IMU Vec buffer push failed."); 
                 }
-            }
-            // frame_data_copy goes out of scope here. If it was moved, its destruction is trivial.
-            // If it was not pushed (e.g., due to condition not met), it's destructed normally (releasing its copied data).
-        }, // End of lambda
-        bufferSize);
+
+                // Push the copy into the SPSC queue
+                if (!imu_buffer_.push(temp_IMU_data_)) {
+                    logMessage("WARNING", "IMU Listener: SPSC IMU buffer push failed."); 
+                }
+            }  
+        }, bufferSize);
 
         // Main loop to run Asio's I/O event processing.
         while (running_.load(std::memory_order_acquire)) {
             try {
-                ioContext.run(); // This will block until work is done or ioContext is stopped.
-                                 // If it returns without an exception, it implies all work is done.
-                if (!running_.load(std::memory_order_acquire)) { // Check running_ again if run() returned cleanly
-                    break;
+                ioContext.run(); 
+                if (!running_.load(std::memory_order_acquire)) { 
                 }
-                // If run() returns and there's still potentially work (or to handle stop signals),
-                // you might need to reset and run again, or break if shutting down.
-                // For a continuous listener, run() might not return unless stopped or an error occurs.
-                // If ioContext.run() returns because it ran out of work, and we are still 'running_',
-                // we should probably restart it if the intent is to keep listening.
-                // However, typically for a server/listener, io_context.run() is expected to block until stop() is called.
-                // If it returns prematurely, ensure io_context is reset if needed before next run() call.
-                // For this pattern, if run() returns, we break, assuming stop() was called elsewhere or an error occurred.
+                
                 break; 
             } catch (const std::exception& e) {
-                // Handle exceptions from ioContext.run()
-                std::lock_guard<std::mutex> lock(consoleMutex); // Protect std::cerr
-                std::cerr << "[Pipeline] Listener: Exception in ioContext.run(): " << e.what() << std::endl;
+                logMessage("ERROR", "IMU Listener: Exception in ioContext."); 
                 if (running_.load(std::memory_order_acquire)) {
-                    ioContext.restart(); // Restart Asio io_context to attempt recovery.
-                    std::cerr << "[Pipeline] Listener: ioContext restarted." << std::endl;
+                    ioContext.restart();
+                    logMessage("LOGGING", "IMU Listener: ioContext restarted.");  
                 } else {
-                    break; // Exit loop if shutting down.
+                    break; 
                 }
             }
         }
     }
     catch(const std::exception& e){
-        // Handle exceptions from UdpSocket creation or other setup.
-        std::lock_guard<std::mutex> lock(consoleMutex); // Protect std::cerr
-        std::cerr << "[Pipeline] Listener: Setup exception: " << e.what() << std::endl;
+        logMessage("ERROR", "IMU Listener: Setup exception.");
     }
 
     // Ensure ioContext is stopped when the listener is done or an error occurs.
     if (!ioContext.stopped()) {
         ioContext.stop();
     }
-    std::lock_guard<std::mutex> lock(consoleMutex);
-    std::cerr << "[Pipeline] Ouster LiDAR(IMU) listener stopped." << std::endl;
+    logMessage("LOGGING", "IMU Listener: listener stopped.");
 }
 
 // -----------------------------------------------------------------------------
@@ -341,66 +326,58 @@ void SLAMPipeline::dataAlignment(const std::vector<int>& allowedCores){
     while (running_.load(std::memory_order_acquire)) {
         try {
             // If no lidar data is available, wait briefly and retry
-            if (decodedPoint_buffer_.empty()) {
+            if (lidar_buffer_.empty()) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             }
 
-            LidarDataFrame temp_LidarData;
-            if (!decodedPoint_buffer_.pop(temp_LidarData)) {
-                std::lock_guard<std::mutex> lock(consoleMutex);
-                std::cerr << "[Pipeline] DataAlignment: Failed to pop from decodedPoint_buffer_." << std::endl;
+            lidarDecode::LidarDataFrame temp_lidar_data__;
+            if (!lidar_buffer_.pop(temp_lidar_data__)) {
+                logMessage("WARNING", "DataAlignment : Failed to retrieved Lidar SPSC."); 
                 continue;
             }
 
             // Skip if lidar data is empty
-            if (temp_LidarData.timestamp_points.empty()) {
-                std::lock_guard<std::mutex> lock(consoleMutex);
-                std::cerr << "[Pipeline] DataAlignment: Empty lidar points for frame ID " << temp_LidarData.frame_id << "." << std::endl;
+            if (temp_lidar_data__.timestamp_points.empty()) {
+                logMessage("WARNING", "DataAlignment : Empty lidar data.");
                 continue;
             }
 
             // Get min and max lidar timestamps (sorted, so use front and back)
-            double min_lidar_time = temp_LidarData.timestamp_points.front();
-            double max_lidar_time = temp_LidarData.timestamp_points.back();
+            double min_lidar_time = temp_lidar_data__.timestamp_points.front();
+            double max_lidar_time = temp_lidar_data__.timestamp_points.back();
 
             // Validate lidar timestamp range
             if (min_lidar_time > max_lidar_time) {
-                std::lock_guard<std::mutex> lock(consoleMutex);
-                std::cerr << "[Pipeline] DataAlignment: Invalid lidar timestamp range: min "
-                          << min_lidar_time << " > max " << max_lidar_time 
-                          << " for frame ID " << temp_LidarData.frame_id << "." << std::endl;
+                logMessage("ERROR", "DataAlignment : Invalid lidar timestamp.");
                 continue;
             }
 
             // Loop to find an IMU vector that aligns with the current lidar frame
             bool aligned = false;
-            while (!aligned){
-                std::vector<LidarIMUDataFrame> temp_LidarIMUDataVec;
-                if (!decodedLidarIMU_buffer_.pop(temp_LidarIMUDataVec)) {
-                    std::lock_guard<std::mutex> lock(consoleMutex);
-                    std::cerr << "[Pipeline] DataAlignment: Failed to pop from decodedLidarIMU_buffer_." << std::endl;
+
+            while (!aligned && imu_vec_buffer_.read_available() > 0){
+
+                std::vector<lidarDecode::LidarIMUDataFrame> temp_IMU_vec_data_;
+
+                if (!imu_vec_buffer_.pop(temp_IMU_vec_data_)) {
+                    logMessage("WARNING", "DataAlignment : Failed to retrieved IMU vec SPSC.");
                     break;
                 }
 
                 // Skip if IMU data is empty
-                if (temp_LidarIMUDataVec.empty()) {
-                    std::lock_guard<std::mutex> lock(consoleMutex);
-                    std::cerr << "[Pipeline] DataAlignment: Empty IMU data vector for lidar frame ID " 
-                              << temp_LidarData.frame_id << "." << std::endl;
+                if (temp_IMU_vec_data_.empty()) {
+                    logMessage("WARNING", "DataAlignment : Empty IMU vec data.");
                     continue;
                 }
 
                 // find min/max
-                double min_imu_time = temp_LidarIMUDataVec.front().Normalized_Timestamp_s;
-                double max_imu_time = temp_LidarIMUDataVec.back().Normalized_Timestamp_s;
+                double min_imu_time = temp_IMU_vec_data_.front().Normalized_Timestamp_s;
+                double max_imu_time = temp_IMU_vec_data_.back().Normalized_Timestamp_s;
 
                 // Verify IMU timestamps are valid and ordered
                 if (min_imu_time > max_imu_time) {
-                    std::lock_guard<std::mutex> lock(consoleMutex);
-                    std::cerr << "[Pipeline] DataAlignment: Invalid IMU timestamp range: min "
-                              << min_imu_time << " > max " << max_imu_time 
-                              << " for lidar frame ID " << temp_LidarData.frame_id << "." << std::endl;
+                    logMessage("WARNING", "DataAlignment : Invalid IMU timestamp.");
                     continue;
                 }
 
@@ -408,28 +385,29 @@ void SLAMPipeline::dataAlignment(const std::vector<int>& allowedCores){
                 if (min_lidar_time >= min_imu_time && max_lidar_time <= max_imu_time) {
                     // Timestamps are aligned; process the data
                     aligned = true;
-                    std::lock_guard<std::mutex> lock(consoleMutex);
-                    std::cout << "[Pipeline] DataAlignment: Timestamps aligned for frame ID " 
-                              << temp_LidarData.frame_id << ". Lidar range: [" 
-                              << min_lidar_time << ", " << max_lidar_time << "], IMU range: ["
-                              << min_imu_time << ", " << max_imu_time << "]" << std::endl;
-                    // Add processing logic here (e.g., store aligned data, interpolate IMU, pass to lioOdometry)
-                    // todo>>
-                
+
+                    logMessage("WARNING", "DataAlignment : Timestamps Lidar and IMU are aligned.");
+
+                    LidarIMUVecDataFrame temp_lidar_IMU_vec_data_;
+                    temp_lidar_IMU_vec_data_.IMUVec = temp_IMU_vec_data_;
+                    temp_lidar_IMU_vec_data_.Lidar = temp_lidar_data__;
+
+                    if (!lidar_imu_buffer_.push(std::move(temp_lidar_IMU_vec_data_))) {
+                        logMessage("WARNING", "DataAlignment : SPSC Lidar and IMU Vec buffer push failed.");
+                    }
+                    
                 } else if (min_lidar_time > min_imu_time && max_lidar_time > max_imu_time){
                     // Lidar is too new or partially overlaps; pop another newer IMU vector >> skip while
                     continue;
-                } else {
+                } else if (min_lidar_time < min_imu_time){
                     // Lidar impossible to catch up with the IMU timestamp, need to discard this Lidar frame.
                     // Potential Solution, increase the size buffer frame.
-                    std::lock_guard<std::mutex> lock(consoleMutex);
-                    std::cerr << "[Pipeline] DataAlignment: Lidar cannot catch up with IMU data, please increase Buffer size" << std::endl;
-                    break;
+                    logMessage("ERROR", "DataAlignment : Lidar cannot catch up with IMU data, please increase Buffer size.");
+                    break;                       
                 }
             }
         } catch (const std::exception& e) {
-            std::lock_guard<std::mutex> lock(consoleMutex);
-            std::cerr << "[Pipeline] DataAlignment: Exception occurred: " << e.what() << std::endl;
+            logMessage("ERROR", "DataAlignment : Exception occurred.");
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
@@ -438,39 +416,39 @@ void SLAMPipeline::dataAlignment(const std::vector<int>& allowedCores){
 
 // -----------------------------------------------------------------------------
 
-void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
-    setThreadAffinity(allowedCores);
+// void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
+//     setThreadAffinity(allowedCores);
 
-    try {
+//     try {
 
-    } catch (const std::exception& e) {
+//     } catch (const std::exception& e) {
 
-    }
-}
+//     }
+// }
 
-// -----------------------------------------------------------------------------
+// // -----------------------------------------------------------------------------
 
-void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
-    setThreadAffinity(allowedCores);
+// void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
+//     setThreadAffinity(allowedCores);
 
-    try {
+//     try {
 
-    } catch (const std::exception& e) {
+//     } catch (const std::exception& e) {
 
-    }
-}
+//     }
+// }
 
-// -----------------------------------------------------------------------------
+// // -----------------------------------------------------------------------------
 
-void SLAMPipeline::runDynamicMapping(const std::vector<int>& allowedCores){
-    setThreadAffinity(allowedCores);
+// void SLAMPipeline::runDynamicMapping(const std::vector<int>& allowedCores){
+//     setThreadAffinity(allowedCores);
 
-    try {
+//     try {
 
-    } catch (const std::exception& e) {
+//     } catch (const std::exception& e) {
 
-    }
-}
+//     }
+// }
 
 
 
