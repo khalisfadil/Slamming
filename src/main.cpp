@@ -8,9 +8,9 @@ int main() {
     // Read and parse JSON file to get udp_profile_lidar and udp_port_lidar
     std::string udp_profile_lidar;
     std::string udp_dest;
+    std::string udp_dest_all = "192.168.75.10";
     uint16_t udp_port_lidar; // Fallback to default port
     uint16_t udp_port_imu;
-    std::string udp_dest_gnss = "192.168.75.11";
     uint16_t udp_port_gnss = 6597;
     uint32_t id20_packet_size = 105;
     try {
@@ -84,14 +84,14 @@ int main() {
             case LidarProfile::RNG19_RFL8_SIG16_NIR16:
                 std::cout << "[Main] Detected RNG19_RFL8_SIG16_NIR16 lidar udp profile." << std::endl;
                 // Use default parameters or adjust if needed
-                threads.emplace_back([&]() { pipeline.runOusterLidarListenerSingleReturn(ioContextPoints, udp_dest, udp_port_lidar, lidar_packet_size, std::vector<int>{0}); });
+                threads.emplace_back([&]() { pipeline.runOusterLidarListenerSingleReturn(ioContextPoints, udp_dest_all, udp_port_lidar, lidar_packet_size, std::vector<int>{0}); });
                 break;
 
             case LidarProfile::LEGACY:
                 std::cout << "[Main] Detected LEGACY lidar udp profile." << std::endl;
                 // Example: Adjust buffer size or port for LEGACY mode if needed
                 // bufferSize = 16384; // Example adjustment
-                threads.emplace_back([&]() { pipeline.runOusterLidarListenerLegacy(ioContextPoints, udp_dest, udp_port_lidar, lidar_packet_size, std::vector<int>{0}); });
+                threads.emplace_back([&]() { pipeline.runOusterLidarListenerLegacy(ioContextPoints, udp_dest_all, udp_port_lidar, lidar_packet_size, std::vector<int>{0}); });
                 break;
 
             case LidarProfile::UNKNOWN:
@@ -100,7 +100,7 @@ int main() {
                 return EXIT_FAILURE;
         }
 
-        threads.emplace_back([&]() { pipeline.runGNSSID20Listener(ioContextPoints, udp_dest_gnss, udp_port_gnss, id20_packet_size, std::vector<int>{1}); });
+        threads.emplace_back([&]() { pipeline.runGNSSID20Listener(ioContextPoints, udp_dest_all, udp_port_gnss, id20_packet_size, std::vector<int>{1}); });
 
         threads.emplace_back([&]() { pipeline.dataAlignmentID20(std::vector<int>{2}); });
 
