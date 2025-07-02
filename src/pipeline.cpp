@@ -355,7 +355,7 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
                 // debug
                 std::ostringstream oss;
                 oss << "ID28 Listener: Input Value. Latitude: " << temp_gnss_ID20_intern_data_.latitude << ", Longitude: " << temp_gnss_ID20_intern_data_.longitude << ", Altitude: " << temp_gnss_ID20_intern_data_.altitude;
-                logMessage("ERROR", oss.str());
+                logMessage("LOGGING", oss.str());
 
                 if (temp_gnss_ID20_vec_data_.size() >= VECTOR_SIZE_ID20) {
                     temp_gnss_ID20_vec_data_.erase(temp_gnss_ID20_vec_data_.begin());
