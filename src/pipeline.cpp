@@ -533,6 +533,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
 
             // debug
             std::ostringstream oss;
+            oss << std::fixed << std::setprecision(6);
             oss << "DataAlignment ID20 : Lidar Time. Min: " << min_lidar_time << ", Max: " << max_lidar_time;
             logMessage("LOGGING", oss.str());
 
@@ -566,6 +567,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
 
                 // debug
                 std::ostringstream oss;
+                oss << std::fixed << std::setprecision(6);
                 oss << "DataAlignment ID20 : Compass Time. Min: " << min_id20_time << ", Max: " << max_id20_time;
                 logMessage("LOGGING", oss.str());
 
