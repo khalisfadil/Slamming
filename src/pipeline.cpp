@@ -4,21 +4,6 @@ using json = nlohmann::json;
 
 std::atomic<bool> SLAMPipeline::running_{true};
 std::condition_variable SLAMPipeline::globalCV_;
-std::atomic<int> SLAMPipeline::dropped_logs_;
-
-boost::lockfree::spsc_queue<lidarDecode::LidarDataFrame, boost::lockfree::capacity<128>> SLAMPipeline::lidar_buffer_;
-
-boost::lockfree::spsc_queue<std::vector<lidarDecode::LidarIMUDataFrame>, boost::lockfree::capacity<128>> SLAMPipeline::imu_vec_buffer_;
-boost::lockfree::spsc_queue<lidarDecode::LidarIMUDataFrame, boost::lockfree::capacity<128>> SLAMPipeline::imu_buffer_;
-
-boost::lockfree::spsc_queue<SLAMPipeline::LidarIMUVecDataFrame, boost::lockfree::capacity<128>> SLAMPipeline::lidar_imu_buffer_;
-
-boost::lockfree::spsc_queue<std::vector<decodeNav::DataFrameID20>, boost::lockfree::capacity<128>> SLAMPipeline::ID20_vec_buffer_;
-boost::lockfree::spsc_queue<decodeNav::DataFrameID20, boost::lockfree::capacity<128>> SLAMPipeline::ID20_buffer_;
-
-boost::lockfree::spsc_queue<SLAMPipeline::LidarID20VecDataFrame, boost::lockfree::capacity<128>> SLAMPipeline::lidar_ID20_buffer_;
-
-boost::lockfree::spsc_queue<std::string, boost::lockfree::capacity<128>> SLAMPipeline::log_queue_;
 
 // -----------------------------------------------------------------------------
 
@@ -353,9 +338,9 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
                 this->unixTime = temp_gnss_ID20_intern_data_.unixTime;
 
                 // debug
-                std::ostringstream oss;
-                oss << "ID28 Listener: Input Value. Latitude: " << temp_gnss_ID20_intern_data_.latitude << ", Longitude: " << temp_gnss_ID20_intern_data_.longitude << ", Altitude: " << temp_gnss_ID20_intern_data_.altitude;
-                logMessage("LOGGING", oss.str());
+                // std::ostringstream oss;
+                // oss << "ID28 Listener: Input Value. Latitude: " << temp_gnss_ID20_intern_data_.latitude << ", Longitude: " << temp_gnss_ID20_intern_data_.longitude << ", Altitude: " << temp_gnss_ID20_intern_data_.altitude;
+                // logMessage("LOGGING", oss.str());
 
                 if (temp_gnss_ID20_vec_data_.size() >= VECTOR_SIZE_ID20) {
                     temp_gnss_ID20_vec_data_.erase(temp_gnss_ID20_vec_data_.begin());

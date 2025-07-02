@@ -43,20 +43,21 @@ class SLAMPipeline {
 
         static std::atomic<bool> running_;
         static std::condition_variable globalCV_;
-        static std::atomic<int> dropped_logs_;
-        static boost::lockfree::spsc_queue<lidarDecode::LidarDataFrame, boost::lockfree::capacity<128>> lidar_buffer_;
+        
+        std::atomic<int> dropped_logs_;
+        boost::lockfree::spsc_queue<lidarDecode::LidarDataFrame, boost::lockfree::capacity<128>> lidar_buffer_;
 
-        static boost::lockfree::spsc_queue<std::vector<lidarDecode::LidarIMUDataFrame>, boost::lockfree::capacity<128>> imu_vec_buffer_;
-        static boost::lockfree::spsc_queue<lidarDecode::LidarIMUDataFrame, boost::lockfree::capacity<128>> imu_buffer_;
+        boost::lockfree::spsc_queue<std::vector<lidarDecode::LidarIMUDataFrame>, boost::lockfree::capacity<128>> imu_vec_buffer_;
+        boost::lockfree::spsc_queue<lidarDecode::LidarIMUDataFrame, boost::lockfree::capacity<128>> imu_buffer_;
 
-        static boost::lockfree::spsc_queue<std::vector<decodeNav::DataFrameID20>, boost::lockfree::capacity<128>> ID20_vec_buffer_;
-        static boost::lockfree::spsc_queue<decodeNav::DataFrameID20, boost::lockfree::capacity<128>> ID20_buffer_;
+        boost::lockfree::spsc_queue<std::vector<decodeNav::DataFrameID20>, boost::lockfree::capacity<128>> ID20_vec_buffer_;
+        boost::lockfree::spsc_queue<decodeNav::DataFrameID20, boost::lockfree::capacity<128>> ID20_buffer_;
         boost::lockfree::spsc_queue<decodeNav::DataFrameID20, boost::lockfree::capacity<128>> ID20_intern_buffer_;
 
-        static boost::lockfree::spsc_queue<LidarIMUVecDataFrame, boost::lockfree::capacity<128>> lidar_imu_buffer_;
-        static boost::lockfree::spsc_queue<LidarID20VecDataFrame, boost::lockfree::capacity<128>> lidar_ID20_buffer_;
+        boost::lockfree::spsc_queue<LidarIMUVecDataFrame, boost::lockfree::capacity<128>> lidar_imu_buffer_;
+        boost::lockfree::spsc_queue<LidarID20VecDataFrame, boost::lockfree::capacity<128>> lidar_ID20_buffer_;
 
-        static boost::lockfree::spsc_queue<std::string, boost::lockfree::capacity<128>> log_queue_;
+        boost::lockfree::spsc_queue<std::string, boost::lockfree::capacity<128>> log_queue_;
 
         explicit SLAMPipeline(const std::string& odom_json_path, const std::string& lidar_json_path); // Constructor with JSON file path
     
