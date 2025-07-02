@@ -384,6 +384,8 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
             // Push the copy into the SPSC queue
             if (!ID20_intern_buffer_.push(temp_gnss_ID20_data_)) {
                 logMessage("WARNING", "ID20 Listener: SPSC ID20 intern buffer push failed."); 
+            } else {
+                logMessage("LOGGING", "ID20 Listener: SPSC ID20 intern buffer push."); 
             }
 
         }, bufferSize);
