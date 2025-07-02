@@ -335,90 +335,88 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
                                       uint16_t port,
                                       uint32_t bufferSize,
                                       const std::vector<int>& allowedCores) {
-    
-    setThreadAffinity(allowedCores); // Sets affinity for this listener thread
+
+    // 1. Set affinity for the current (consumer) thread
+    setThreadAffinity(allowedCores);
 
     if (host.empty() || port == 0) {
         std::ostringstream oss;
         oss << "ID28 Listener: Invalid host or port. Host: " << host << ", Port: " << port;
-        logMessage("ERROR", oss.str());  
+        logMessage("ERROR", oss.str());
         return;
     }
 
-    // New processing function
     auto processGNSSID20Frames = [&]() {
         decodeNav::DataFrameID20 temp_gnss_ID20_intern_data_;
-        // Process all available frames in the queue (non-blocking)
-        ID20_intern_buffer_.pop(temp_gnss_ID20_intern_data_);
-        // Check if the frame is valid and not a duplicate
-        if (temp_gnss_ID20_intern_data_.unixTime > 0 && temp_gnss_ID20_intern_data_.unixTime != this->unixTime) {
-            this->unixTime = temp_gnss_ID20_intern_data_.unixTime;
+        if (ID20_intern_buffer_.pop(temp_gnss_ID20_intern_data_)) {
+            if (temp_gnss_ID20_intern_data_.unixTime > 0 && temp_gnss_ID20_intern_data_.unixTime != this->unixTime) {
+                this->unixTime = temp_gnss_ID20_intern_data_.unixTime;
 
-            // If the vector is full, remove the oldest frame
-            if (temp_gnss_ID20_vec_data_.size() >= VECTOR_SIZE_ID20) {
-                temp_gnss_ID20_vec_data_.erase(temp_gnss_ID20_vec_data_.begin());
-            }
+                // debug
+                std::ostringstream oss;
+                oss << "ID28 Listener: Input Value. Latitude: " << temp_gnss_ID20_intern_data_.latitude << ", Longitude: " << temp_gnss_ID20_intern_data_.longitude << ", Altitude: " << temp_gnss_ID20_intern_data_.altitude;
+                logMessage("ERROR", oss.str());
 
-            // Push the new frame into the vector
-            temp_gnss_ID20_vec_data_.push_back(temp_gnss_ID20_intern_data_);
+                if (temp_gnss_ID20_vec_data_.size() >= VECTOR_SIZE_ID20) {
+                    temp_gnss_ID20_vec_data_.erase(temp_gnss_ID20_vec_data_.begin());
+                }
+                temp_gnss_ID20_vec_data_.push_back(temp_gnss_ID20_intern_data_);
 
-            // Push the vector to the vector buffer
-            if (!ID20_vec_buffer_.push(temp_gnss_ID20_vec_data_)) {
-                logMessage("WARNING", "ID20 Listener: SPSC ID20 Vec buffer push failed.");
-            }
-
-            // Push the copy into the SPSC queue
-            if (!ID20_buffer_.push(temp_gnss_ID20_intern_data_)) {
-                logMessage("WARNING", "ID20 Listener: SPSC ID20 buffer push failed."); 
+                if (!ID20_vec_buffer_.push(temp_gnss_ID20_vec_data_)) {
+                    logMessage("WARNING", "ID20 Listener: SPSC ID20 Vec buffer push failed.");
+                }
+                if (!ID20_buffer_.push(temp_gnss_ID20_intern_data_)) {
+                    logMessage("WARNING", "ID20 Listener: SPSC ID20 buffer push failed.");
+                }
             }
         }
     };
 
     try {
         UdpSocket listener(ioContext, host, port,[&](const std::vector<uint8_t>& packet_data) {
-
             decodeNav::DataFrameID20 temp_gnss_ID20_data_;
-            // Decode the packet into frame_data_IMU_copy
             gnssCallback.decode_ID20(packet_data, temp_gnss_ID20_data_);
 
-            // Push the copy into the SPSC queue
             if (!ID20_intern_buffer_.push(temp_gnss_ID20_data_)) {
-                logMessage("WARNING", "ID20 Listener: SPSC ID20 intern buffer push failed."); 
-            } else {
-                logMessage("LOGGING", "ID20 Listener: SPSC ID20 intern buffer push."); 
+                logMessage("WARNING", "ID20 Listener: SPSC ID20 intern buffer push failed.");
             }
-
         }, bufferSize);
 
-        // Main loop to run Asio's I/O event processing.
-        while (running_.load(std::memory_order_acquire)) {
+        std::thread ioThread([&]() {
+            // 2. Set affinity for this new I/O (producer) thread to the SAME core(s).
+            setThreadAffinity(allowedCores);
+
             try {
-                ioContext.run(); 
-                processGNSSID20Frames();
-                if (!running_.load(std::memory_order_acquire)) { 
-                }
-                
-                break; 
+                ioContext.run();
             } catch (const std::exception& e) {
-                logMessage("ERROR", "ID20 Listener: Exception in ioContext."); 
-                if (running_.load(std::memory_order_acquire)) {
-                    ioContext.restart();
-                    logMessage("LOGGING", "ID20 Listener: ioContext restarted.");  
-                } else {
-                    break; 
-                }
+                logMessage("ERROR", "ID20 Listener: Exception in I/O thread.");
             }
+            logMessage("LOGGING", "ID20 Listener: I/O thread finished.");
+        });
+
+        logMessage("LOGGING", "ID20 Listener: Consumer loop started.");
+        while (running_.load(std::memory_order_acquire)) {
+            processGNSSID20Frames();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
+
+        logMessage("LOGGING", "ID20 Listener: Stopping I/O context.");
+        if (!ioContext.stopped()) {
+            ioContext.stop();
+        }
+        if (ioThread.joinable()) {
+            ioThread.join();
+        }
+
     }
     catch(const std::exception& e){
         logMessage("ERROR", "ID20 Listener: Setup exception.");
+        if (!ioContext.stopped()) {
+            ioContext.stop();
+        }
     }
 
-    // Ensure ioContext is stopped when the listener is done or an error occurs.
-    if (!ioContext.stopped()) {
-        ioContext.stop();
-    }
-    logMessage("LOGGING", "ID20 Listener: listener stopped.");
+    logMessage("LOGGING", "ID20 Listener: Listener stopped.");
 }
 
 // -----------------------------------------------------------------------------
