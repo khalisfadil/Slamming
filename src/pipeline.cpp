@@ -531,6 +531,11 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
             double min_lidar_time = temp_lidar_data__.timestamp_points.front();
             double max_lidar_time = temp_lidar_data__.timestamp_points.back();
 
+            // debug
+            std::ostringstream oss;
+            oss << "DataAlignment ID20 : Lidar Time. Min: " << min_lidar_time << ", Max: " << max_lidar_time;
+            logMessage("LOGGING", oss.str());
+
             // Validate lidar timestamp range
             if (min_lidar_time > max_lidar_time) {
                 logMessage("ERROR", "DataAlignment ID20 : Invalid lidar timestamp.");
@@ -558,6 +563,11 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
                 // find min/max
                 double min_id20_time = temp_gnss_ID20_vec_data__.front().unixTime;
                 double max_id20_time = temp_gnss_ID20_vec_data__.back().unixTime;
+
+                // debug
+                std::ostringstream oss;
+                oss << "DataAlignment ID20 : Compass Time. Min: " << min_id20_time << ", Max: " << max_id20_time;
+                logMessage("LOGGING", oss.str());
 
                 // Verify IMU timestamps are valid and ordered
                 if (min_id20_time > max_id20_time) {
