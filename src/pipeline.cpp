@@ -546,8 +546,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
             // Loop to find an IMU vector that aligns with the current lidar frame
             bool aligned = false;
 
-            while (!aligned && ID20_vec_buffer_.read_available() > 0){
-
+            while (!aligned && ID20_vec_buffer_.read_available() > 0) {
                 std::vector<decodeNav::DataFrameID20> temp_gnss_ID20_vec_data__;
 
                 if (!ID20_vec_buffer_.pop(temp_gnss_ID20_vec_data__)) {
@@ -561,11 +560,11 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
                     break;
                 }
 
-                // find min/max
+                // Find min/max timestamps of filtered data
                 double min_id20_time = temp_gnss_ID20_vec_data__.front().unixTime;
                 double max_id20_time = temp_gnss_ID20_vec_data__.back().unixTime;
 
-                // debug
+                // Debug
                 // std::ostringstream oss;
                 // oss << std::fixed << std::setprecision(6);
                 // oss << "DataAlignment ID20 : Compass Time. Min: " << min_id20_time << ", Max: " << max_id20_time;
@@ -573,7 +572,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
 
                 // Verify IMU timestamps are valid and ordered
                 if (min_id20_time > max_id20_time) {
-                    logMessage("WARNING", "DataAlignment ID20 : Invalid ID20 timestamp.");
+                    logMessage("WARNING", "DataAlignment ID20 : Invalid ID20 timestamp after filtering.");
                     continue;
                 }
 
@@ -584,22 +583,41 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
 
                     logMessage("LOGGING", "DataAlignment ID20 : Timestamps Lidar and ID20 are aligned.");
 
+                    // Filter temp_gnss_ID20_vec_data__ to include only readings within min_lidar_time and max_lidar_time
+                    std::vector<decodeNav::DataFrameID20> filtered_gnss_ID20_vec_data__;
+                    filtered_gnss_ID20_vec_data__.reserve(temp_gnss_ID20_vec_data__.size()); // Reserve space for efficiency
+                    for (const auto& id20_data : temp_gnss_ID20_vec_data__) {
+                        if (id20_data.unixTime >= min_lidar_time && id20_data.unixTime <= max_lidar_time) {
+                            filtered_gnss_ID20_vec_data__.push_back(id20_data);
+                        }
+                    }
+
+                    // Check if filtered data is empty
+                    if (filtered_gnss_ID20_vec_data__.empty()) {
+                        logMessage("WARNING", "DataAlignment ID20 : No ID20 data within lidar timestamp range.");
+                        continue;
+                    }
+
+                    // Debug
+                    std::ostringstream oss;
+                    oss << std::fixed << std::setprecision(6);
+                    oss << "DataAlignment ID20 : Compass Time. Min: " << filtered_gnss_ID20_vec_data__.front().unixTime << ", Max: " << filtered_gnss_ID20_vec_data__.back().unixTime;
+                    logMessage("LOGGING", oss.str());
+
                     LidarID20VecDataFrame temp_lidar_ID20_vec_data_;
-                    temp_lidar_ID20_vec_data_.ID20Vec = temp_gnss_ID20_vec_data__;
+                    temp_lidar_ID20_vec_data_.ID20Vec = std::move(filtered_gnss_ID20_vec_data__); // Use filtered data
                     temp_lidar_ID20_vec_data_.Lidar = temp_lidar_data__;
 
                     if (!lidar_ID20_buffer_.push(std::move(temp_lidar_ID20_vec_data_))) {
                         logMessage("WARNING", "DataAlignment ID20 : SPSC Lidar and ID20 Vec buffer push failed.");
                     }
-                    
-                } else if (min_lidar_time > min_id20_time && max_lidar_time > max_id20_time){
-                    // Lidar is too new or partially overlaps; pop another newer IMU vector >> skip while
+                } else if (min_lidar_time > min_id20_time && max_lidar_time > max_id20_time) {
+                    // Lidar is too new or partially overlaps; pop another newer IMU vector
                     continue;
                 } else {
-                    // Lidar impossible to catch up with the IMU timestamp, need to discard this Lidar frame.
-                    // Potential Solution, increase the size buffer frame.
+                    // Lidar impossible to catch up with the IMU timestamp, need to discard this Lidar frame
                     logMessage("ERROR", "DataAlignment ID20 : Lidar cannot catch up with ID20 data, please increase Buffer size.");
-                    break;                       
+                    break;
                 }
             }
         } catch (const std::exception& e) {
