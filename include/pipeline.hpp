@@ -43,7 +43,7 @@ class SLAMPipeline {
 
         static std::atomic<bool> running_;
         static std::condition_variable globalCV_;
-        
+
         std::atomic<int> dropped_logs_;
         boost::lockfree::spsc_queue<lidarDecode::LidarDataFrame, boost::lockfree::capacity<128>> lidar_buffer_;
 
@@ -98,12 +98,12 @@ class SLAMPipeline {
         // decodeNav::DataFrameID20 temp_gnss_ID20_data_;
         std::vector<decodeNav::DataFrameID20> temp_gnss_ID20_vec_data_;
         double unixTime = 0.0;
-        const size_t VECTOR_SIZE_ID20 = 15;
+        const size_t VECTOR_SIZE_ID20 = 5;
 
         // runOusterLidarIMUListener
         lidarDecode::LidarIMUDataFrame temp_IMU_data_;
         std::vector<lidarDecode::LidarIMUDataFrame> temp_IMU_vec_data_;
-        const size_t VECTOR_SIZE_IMU = 15;
+        const size_t VECTOR_SIZE_IMU = 5;
 
         // runOusterLidarIMUListener
         uint64_t Normalized_Timestamp_s_ = 0.0;
