@@ -71,8 +71,11 @@ void SLAMPipeline::processLogQueue(const std::string& filename, const std::vecto
 
     std::ofstream outfile(filename);
     if (!outfile.is_open()) {
+        auto now = std::chrono::system_clock::now();
+        auto now_time_t = std::chrono::system_clock::to_time_t(now);
         std::ostringstream oss;
-        oss << "[Logging] Error: Failed to open file " << filename << " for writing.\n";
+        oss << "[" << std::put_time(std::gmtime(&now_time_t), "%Y-%m-%dT%H:%M:%SZ") << "] "
+            << "[ERROR] failed to open file " << filename << " for writing.\n";
         std::cerr << oss.str(); // Fallback to cerr if file cannot be opened
         return;
     }
@@ -84,8 +87,11 @@ void SLAMPipeline::processLogQueue(const std::string& filename, const std::vecto
             outfile << message;
             int currentDrops = dropped_logs_.load(std::memory_order_relaxed);
             if (currentDrops > lastReportedDrops && (currentDrops - lastReportedDrops) >= 100) {
+                auto now = std::chrono::system_clock::now();
+                auto now_time_t = std::chrono::system_clock::to_time_t(now);
                 std::ostringstream oss;
-                oss << "[LOGGING] Warning: " << (currentDrops - lastReportedDrops) << " log messages dropped due to queue overflow.\n";
+                oss << "[" << std::put_time(std::gmtime(&now_time_t), "%Y-%m-%dT%H:%M:%SZ") << "] "
+                    << "[WARNING] " << (currentDrops - lastReportedDrops) << " log messages dropped due to queue overflow.\n";
                 outfile << oss.str();
                 lastReportedDrops = currentDrops;
             }
@@ -532,6 +538,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
             double max_lidar_time = temp_lidar_data__.timestamp_points.back();
 
             // debug
+            logMessage("LOGGING", "New Lidar Frame.");
             std::ostringstream oss;
             oss << std::fixed << std::setprecision(12);
             oss << "DataAlignment ID20 : Lidar Time. Min: " << min_lidar_time << ", Max: " << max_lidar_time;
