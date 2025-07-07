@@ -249,6 +249,7 @@ target_include_directories(slam_core
 target_link_libraries(slam_core
     PUBLIC
         Eigen3::Eigen
+        glog::glog
         nlohmann_json::nlohmann_json
         TBB::tbb
         Boost::system
