@@ -538,11 +538,11 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
             double max_lidar_time = temp_lidar_data__.timestamp_points.back();
 
             // debug
-            logMessage("LOGGING", "New Lidar Frame.");
-            std::ostringstream oss;
-            oss << std::fixed << std::setprecision(12);
-            oss << "DataAlignment ID20 : Lidar Time. Min: " << min_lidar_time << ", Max: " << max_lidar_time;
-            logMessage("LOGGING", oss.str());
+            // logMessage("LOGGING", "New Lidar Frame.");
+            // std::ostringstream oss;
+            // oss << std::fixed << std::setprecision(12);
+            // oss << "DataAlignment ID20 : Lidar Time. Min: " << min_lidar_time << ", Max: " << max_lidar_time;
+            // logMessage("LOGGING", oss.str());
 
             // Validate lidar timestamp range
             if (min_lidar_time > max_lidar_time) {
@@ -606,10 +606,10 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
 
                     if (min_filtered_id20_time >= min_lidar_time && max_filtered_id20_time <= max_lidar_time){
                         // Debug
-                        std::ostringstream oss;
-                        oss << std::fixed << std::setprecision(12);
-                        oss << "DataAlignment ID20 : Compass Time. Min: " << filtered_gnss_ID20_vec_data__.front().unixTime << ", Max: " << filtered_gnss_ID20_vec_data__.back().unixTime << ", Size: " << filtered_gnss_ID20_vec_data__.size();
-                        logMessage("LOGGING", oss.str());
+                        // std::ostringstream oss;
+                        // oss << std::fixed << std::setprecision(12);
+                        // oss << "DataAlignment ID20 : Compass Time. Min: " << filtered_gnss_ID20_vec_data__.front().unixTime << ", Max: " << filtered_gnss_ID20_vec_data__.back().unixTime << ", Size: " << filtered_gnss_ID20_vec_data__.size();
+                        // logMessage("LOGGING", oss.str());
 
                         LidarID20VecDataFrame temp_lidar_ID20_vec_data_;
                         temp_lidar_ID20_vec_data_.ID20Vec = std::move(filtered_gnss_ID20_vec_data__); // Use filtered data
