@@ -586,31 +586,31 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
 
                     // Filter temp_gnss_ID20_vec_data__ to include only readings within min_lidar_time and max_lidar_time
                     std::vector<decodeNav::DataFrameID20> filtered_gnss_ID20_vec_data__;
-                    filtered_gnss_ID20_vec_data__.reserve(temp_gnss_ID20_vec_data__.size()); // Reserve space for efficiency
+                    // filtered_gnss_ID20_vec_data__.reserve(temp_gnss_ID20_vec_data__.size()); // Reserve space for efficiency
                     for (const auto& id20_data : temp_gnss_ID20_vec_data__) {
-                        if (id20_data.unixTime >= min_lidar_time && id20_data.unixTime <= max_lidar_time) {
+                        if (id20_data.unixTime > min_lidar_time && id20_data.unixTime < max_lidar_time) {
                             filtered_gnss_ID20_vec_data__.push_back(id20_data);
                         }
                     }
 
-                    // Check if filtered data is empty
-                    if (filtered_gnss_ID20_vec_data__.empty()) {
-                        logMessage("WARNING", "DataAlignment ID20 : No ID20 data within lidar timestamp range.");
-                        continue;
-                    }
+                    // find min/max
+                    double min_filtered_id20_time = filtered_gnss_ID20_vec_data__.front().unixTime;
+                    double max_filtered_id20_time = filtered_gnss_ID20_vec_data__.back().unixTime;
 
-                    // Debug
-                    std::ostringstream oss;
-                    oss << std::fixed << std::setprecision(6);
-                    oss << "DataAlignment ID20 : Compass Time. Min: " << filtered_gnss_ID20_vec_data__.front().unixTime << ", Max: " << filtered_gnss_ID20_vec_data__.back().unixTime;
-                    logMessage("LOGGING", oss.str());
+                    if (min_filtered_id20_time > min_lidar_time && max_filtered_id20_time < max_lidar_time){
+                        // Debug
+                        std::ostringstream oss;
+                        oss << std::fixed << std::setprecision(12);
+                        oss << "DataAlignment ID20 : Compass Time. Min: " << filtered_gnss_ID20_vec_data__.front().unixTime << ", Max: " << filtered_gnss_ID20_vec_data__.back().unixTime << ", Size: " << filtered_gnss_ID20_vec_data__.size();
+                        logMessage("LOGGING", oss.str());
 
-                    LidarID20VecDataFrame temp_lidar_ID20_vec_data_;
-                    temp_lidar_ID20_vec_data_.ID20Vec = std::move(filtered_gnss_ID20_vec_data__); // Use filtered data
-                    temp_lidar_ID20_vec_data_.Lidar = temp_lidar_data__;
+                        LidarID20VecDataFrame temp_lidar_ID20_vec_data_;
+                        temp_lidar_ID20_vec_data_.ID20Vec = std::move(filtered_gnss_ID20_vec_data__); // Use filtered data
+                        temp_lidar_ID20_vec_data_.Lidar = temp_lidar_data__;
 
-                    if (!lidar_ID20_buffer_.push(std::move(temp_lidar_ID20_vec_data_))) {
-                        logMessage("WARNING", "DataAlignment ID20 : SPSC Lidar and ID20 Vec buffer push failed.");
+                        if (!lidar_ID20_buffer_.push(std::move(temp_lidar_ID20_vec_data_))) {
+                            logMessage("WARNING", "DataAlignment ID20 : SPSC Lidar and ID20 Vec buffer push failed.");
+                        }
                     }
                     
                 } else if (min_lidar_time > min_id20_time && max_lidar_time > max_id20_time){
