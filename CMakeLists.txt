@@ -20,7 +20,12 @@ endif()
 set(Open3D_DIR "/usr/local/lib/cmake/Open3D/" CACHE PATH "Path to Open3D CMake config")
 set(TBB_DIR "/usr/lib/x86_64-linux-gnu/cmake/TBB" CACHE PATH "Path to TBB CMake config")
 set(Unwind_INCLUDE_DIR /usr/include/libunwind CACHE PATH "Path to libunwind headers")
-set(Unwind_LIBRARY /usr/lib/x86_64-linux-gnu/libunwind.so CACHE FILEPATH "Path to libunwind library")
+
+find_library(Unwind_LIBRARY NAMES libunwind.so.8 PATHS /usr/lib/x86_64-linux-gnu)
+if(NOT Unwind_LIBRARY)
+    message(FATAL_ERROR "libunwind.so.8 not found")
+endif()
+
 find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(glog REQUIRED)
 find_package(nlohmann_json REQUIRED)
@@ -258,6 +263,7 @@ target_link_libraries(slam_core
         Boost::thread
         Open3D::Open3D
         Threads::Threads
+        ${Unwind_LIBRARY}
     PRIVATE
         $<$<BOOL:${CPUID_LIBRARY}>:${CPUID_LIBRARY}>
 )
