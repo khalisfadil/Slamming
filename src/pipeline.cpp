@@ -21,8 +21,7 @@ void SLAMPipeline::logMessage(const std::string& level, const std::string& messa
 // -----------------------------------------------------------------------------
 
 SLAMPipeline::SLAMPipeline(const std::string& odom_json_path, const std::string& lidar_json_path) 
-// : lioOdometry(odom_json_path), lidarCallback(lidar_json_path){
-    : lidarCallback(lidar_json_path){
+    : lioOdometry(odom_json_path), lidarCallback(lidar_json_path){
     temp_IMU_vec_data_.reserve(VECTOR_SIZE_IMU);
 }
 

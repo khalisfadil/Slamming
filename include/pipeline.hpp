@@ -18,7 +18,7 @@
 #include <LidarIMUDataFrame.hpp>
 
 #include <OusterLidarCallback.hpp>
-// #include <odometry/lidarinertialodometry.hpp>
+#include <odometry/lidarinertialodometry.hpp>
 
 #include <callback_gnssComp.hpp>
 #include <DataFrame_ID20.hpp>
@@ -78,15 +78,15 @@ class SLAMPipeline {
         // application for slam
         void dataAlignmentLocalIMU(const std::vector<int>& allowedCores);
         void dataAlignmentID20(const std::vector<int>& allowedCores);
-        void runLioStateEstimation(const std::vector<int>& allowedCores);
+        // void runLioStateEstimation(const std::vector<int>& allowedCores);
         
         // application for DynamicMapping
-        void runDynamicMapping(const std::vector<int>& allowedCores);
+        // void runDynamicMapping(const std::vector<int>& allowedCores);
         
     private:
 
         // finalState
-        // stateestimate::lidarinertialodom lioOdometry;
+        stateestimate::lidarinertialodom lioOdometry;
 
         // runOusterLidarListener
         lidarDecode::OusterLidarCallback lidarCallback;

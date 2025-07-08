@@ -19,15 +19,15 @@ endif()
 # Find dependencies
 set(Open3D_DIR "/usr/local/lib/cmake/Open3D/" CACHE PATH "Path to Open3D CMake config")
 set(TBB_DIR "/usr/lib/x86_64-linux-gnu/cmake/TBB" CACHE PATH "Path to TBB CMake config")
-set(Unwind_INCLUDE_DIR /usr/include/libunwind CACHE PATH "Path to libunwind headers")
+# set(Unwind_INCLUDE_DIR /usr/include/libunwind CACHE PATH "Path to libunwind headers")
 
-find_library(Unwind_LIBRARY NAMES libunwind.so.8 PATHS /usr/lib/x86_64-linux-gnu)
-if(NOT Unwind_LIBRARY)
-    message(FATAL_ERROR "libunwind.so.8 not found")
-endif()
+# find_library(Unwind_LIBRARY NAMES libunwind.so.8 PATHS /usr/lib/x86_64-linux-gnu)
+# if(NOT Unwind_LIBRARY)
+#     message(FATAL_ERROR "libunwind.so.8 not found")
+# endif()
 
 find_package(Eigen3 REQUIRED NO_MODULE)
-find_package(glog REQUIRED)
+# find_package(glog REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system thread)
 find_package(Open3D REQUIRED)
@@ -256,7 +256,7 @@ target_include_directories(slam_core
 target_link_libraries(slam_core
     PUBLIC
         Eigen3::Eigen
-        glog::glog
+        # glog::glog
         nlohmann_json::nlohmann_json
         TBB::tbb
         Boost::system
