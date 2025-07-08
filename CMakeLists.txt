@@ -51,37 +51,37 @@ endif()
 # Define include directories
 set(SLAM_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/include")
 set(FINALICP_INCLUDE_DIRS
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/common"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/evaluable"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/evaluable/imu"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/evaluable/p2p"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/evaluable/se3"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/evaluable/vspace"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/matrixoperator"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/problem"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/problem/costterm"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/problem/lossfunc"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/problem/noisemodel"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/solver"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/trajectory"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/trajectory/bspline"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/trajectory/constacc"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/trajectory/constvel"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/trajectory/singer"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/common"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/evaluable"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/evaluable/imu"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/evaluable/p2p"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/evaluable/se3"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/evaluable/vspace"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/matrixoperator"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/problem"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/problem/costterm"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/problem/lossfunc"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/problem/noisemodel"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/solver"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/trajectory"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/trajectory/bspline"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/trajectory/constacc"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/trajectory/constvel"
+    "${CMAKE_SOURCE_DIR}/extern/FinalICP/include/trajectory/singer"
 )
 set(FINALSTATEESTIMATION_INCLUDE_DIRS
-    # "${CMAKE_SOURCE_DIR}/extern/FinalStateEstimation/include"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalStateEstimation/include/odometry"
-    # "${CMAKE_SOURCE_DIR}/extern/FinalStateEstimation/include/utils"
+    "${CMAKE_SOURCE_DIR}/extern/FinalStateEstimation/include"
+    "${CMAKE_SOURCE_DIR}/extern/FinalStateEstimation/include/odometry"
+    "${CMAKE_SOURCE_DIR}/extern/FinalStateEstimation/include/utils"
 )
 set(GNSSKOMPASS_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/extern/GNSSKompass/include")
 set(LIDARDECODE_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/extern/LidarDecode/include")
 set(LIEGROUPMATH_INCLUDE_DIRS
-    # "${CMAKE_SOURCE_DIR}/extern/liegroupMath/include"
-    # "${CMAKE_SOURCE_DIR}/extern/liegroupMath/include/r3"
-    # "${CMAKE_SOURCE_DIR}/extern/liegroupMath/include/se3"
-    # "${CMAKE_SOURCE_DIR}/extern/liegroupMath/include/so3"
+    "${CMAKE_SOURCE_DIR}/extern/liegroupMath/include"
+    "${CMAKE_SOURCE_DIR}/extern/liegroupMath/include/r3"
+    "${CMAKE_SOURCE_DIR}/extern/liegroupMath/include/se3"
+    "${CMAKE_SOURCE_DIR}/extern/liegroupMath/include/so3"
 )
 set(ROBIN_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/3rdparty/robin-map/include/tsl")
 
@@ -116,102 +116,102 @@ set(SOURCE_GROUPS
 
 # Define source files for each group
 set(MATRIXOPERATOR_SOURCES
-    # extern/FinalICP/src/matrixoperator/matrix.cpp
-    # extern/FinalICP/src/matrixoperator/matrixbase.cpp
-    # extern/FinalICP/src/matrixoperator/matrixindexing.cpp
-    # extern/FinalICP/src/matrixoperator/matrixsparse.cpp
-    # extern/FinalICP/src/matrixoperator/vector.cpp
+    extern/FinalICP/src/matrixoperator/matrix.cpp
+    extern/FinalICP/src/matrixoperator/matrixbase.cpp
+    extern/FinalICP/src/matrixoperator/matrixindexing.cpp
+    extern/FinalICP/src/matrixoperator/matrixsparse.cpp
+    extern/FinalICP/src/matrixoperator/vector.cpp
 )
 
 set(EVALUABLE_IMU_SOURCES
-    # extern/FinalICP/src/evaluable/imu/accerrorevaluator.cpp
-    # extern/FinalICP/src/evaluable/imu/dmierrorevaluator.cpp
-    # extern/FinalICP/src/evaluable/imu/gyroerrorevaluator.cpp
-    # extern/FinalICP/src/evaluable/imu/gyroerrorevaluatorse2.cpp
-    # extern/FinalICP/src/evaluable/imu/imuerrorevaluator.cpp
+    extern/FinalICP/src/evaluable/imu/accerrorevaluator.cpp
+    extern/FinalICP/src/evaluable/imu/dmierrorevaluator.cpp
+    extern/FinalICP/src/evaluable/imu/gyroerrorevaluator.cpp
+    extern/FinalICP/src/evaluable/imu/gyroerrorevaluatorse2.cpp
+    extern/FinalICP/src/evaluable/imu/imuerrorevaluator.cpp
 )
 
 set(EVALUABLE_P2P_SOURCES
-    # extern/FinalICP/src/evaluable/p2p/p2perrorevaluator.cpp
-    # extern/FinalICP/src/evaluable/p2p/p2planeerrorevaluator.cpp
-    # extern/FinalICP/src/evaluable/p2p/p2planeerrorglobalperturbevaluator.cpp
-    # extern/FinalICP/src/evaluable/p2p/velerrorevaluator.cpp
-    # extern/FinalICP/src/evaluable/p2p/yawerrorevaluator.cpp
-    # extern/FinalICP/src/evaluable/p2p/yawvelerrorevaluator.cpp
+    extern/FinalICP/src/evaluable/p2p/p2perrorevaluator.cpp
+    extern/FinalICP/src/evaluable/p2p/p2planeerrorevaluator.cpp
+    extern/FinalICP/src/evaluable/p2p/p2planeerrorglobalperturbevaluator.cpp
+    extern/FinalICP/src/evaluable/p2p/velerrorevaluator.cpp
+    extern/FinalICP/src/evaluable/p2p/yawerrorevaluator.cpp
+    extern/FinalICP/src/evaluable/p2p/yawvelerrorevaluator.cpp
 )
 
 set(EVALUABLE_SE3_SOURCES
-    # extern/FinalICP/src/evaluable/se3/composeevaluator.cpp
-    # extern/FinalICP/src/evaluable/se3/composeinverseevaluator.cpp
-    # extern/FinalICP/src/evaluable/se3/composevelocityevaluator.cpp
-    # extern/FinalICP/src/evaluable/se3/expmapevaluator.cpp
-    # extern/FinalICP/src/evaluable/se3/inverseevaluator.cpp
-    # extern/FinalICP/src/evaluable/se3/logmapevaluator.cpp
-    # extern/FinalICP/src/evaluable/se3/poseinterpolator.cpp
-    # extern/FinalICP/src/evaluable/se3/se3errorevaluator.cpp
-    # extern/FinalICP/src/evaluable/se3/se3globalperturbevaluator.cpp
-    # extern/FinalICP/src/evaluable/se3/se3statevar.cpp
-    # extern/FinalICP/src/evaluable/se3/se3statevarglobalperturbevaluator.cpp
+    extern/FinalICP/src/evaluable/se3/composeevaluator.cpp
+    extern/FinalICP/src/evaluable/se3/composeinverseevaluator.cpp
+    extern/FinalICP/src/evaluable/se3/composevelocityevaluator.cpp
+    extern/FinalICP/src/evaluable/se3/expmapevaluator.cpp
+    extern/FinalICP/src/evaluable/se3/inverseevaluator.cpp
+    extern/FinalICP/src/evaluable/se3/logmapevaluator.cpp
+    extern/FinalICP/src/evaluable/se3/poseinterpolator.cpp
+    extern/FinalICP/src/evaluable/se3/se3errorevaluator.cpp
+    extern/FinalICP/src/evaluable/se3/se3globalperturbevaluator.cpp
+    extern/FinalICP/src/evaluable/se3/se3statevar.cpp
+    extern/FinalICP/src/evaluable/se3/se3statevarglobalperturbevaluator.cpp
 )
 
 set(PROBLEM_SOURCES
-    # extern/FinalICP/src/problem/costterm/gyrosupercostterm.cpp
-    # extern/FinalICP/src/problem/costterm/imusupercostterm.cpp
-    # extern/FinalICP/src/problem/costterm/p2pconstvelsupercostterm.cpp
-    # extern/FinalICP/src/problem/costterm/p2pglobalperturbsupercostterm.cpp
-    # extern/FinalICP/src/problem/costterm/p2psupercostterm.cpp
-    # extern/FinalICP/src/problem/costterm/preintegratedimucostterm.cpp
-    # extern/FinalICP/src/problem/costterm/preintgratedaccelcostterm.cpp
-    # extern/FinalICP/src/problem/optimizationproblem.cpp
-    # extern/FinalICP/src/problem/slidingwindowfilter.cpp
-    # extern/FinalICP/src/problem/statevector.cpp
+    extern/FinalICP/src/problem/costterm/gyrosupercostterm.cpp
+    extern/FinalICP/src/problem/costterm/imusupercostterm.cpp
+    extern/FinalICP/src/problem/costterm/p2pconstvelsupercostterm.cpp
+    extern/FinalICP/src/problem/costterm/p2pglobalperturbsupercostterm.cpp
+    extern/FinalICP/src/problem/costterm/p2psupercostterm.cpp
+    extern/FinalICP/src/problem/costterm/preintegratedimucostterm.cpp
+    extern/FinalICP/src/problem/costterm/preintgratedaccelcostterm.cpp
+    extern/FinalICP/src/problem/optimizationproblem.cpp
+    extern/FinalICP/src/problem/slidingwindowfilter.cpp
+    extern/FinalICP/src/problem/statevector.cpp
 )
 
 set(SOLVER_SOURCES
-    # extern/FinalICP/src/solver/covariance.cpp
-    # extern/FinalICP/src/solver/dogleggaussnewtonsolver.cpp
-    # extern/FinalICP/src/solver/gausnewtonsolver.cpp
-    # extern/FinalICP/src/solver/gausnewtonsolvernva.cpp
-    # extern/FinalICP/src/solver/levmarqgaussnewtonsolver.cpp
-    # extern/FinalICP/src/solver/linesearchgaussnewtonsolver.cpp
-    # extern/FinalICP/src/solver/solverbase.cpp
+    extern/FinalICP/src/solver/covariance.cpp
+    extern/FinalICP/src/solver/dogleggaussnewtonsolver.cpp
+    extern/FinalICP/src/solver/gausnewtonsolver.cpp
+    extern/FinalICP/src/solver/gausnewtonsolvernva.cpp
+    extern/FinalICP/src/solver/levmarqgaussnewtonsolver.cpp
+    extern/FinalICP/src/solver/linesearchgaussnewtonsolver.cpp
+    extern/FinalICP/src/solver/solverbase.cpp
 )
 
 set(TRAJECTORY_BSPLINE_SOURCES
-    # extern/FinalICP/src/trajectory/bspline/interface.cpp
-    # extern/FinalICP/src/trajectory/bspline/velocityinterpolator.cpp
+    extern/FinalICP/src/trajectory/bspline/interface.cpp
+    extern/FinalICP/src/trajectory/bspline/velocityinterpolator.cpp
 )
 
 set(TRAJECTORY_CONSTACC_SOURCES
-    # extern/FinalICP/src/trajectory/constacc/evaluable/composecurlyhatevaluator.cpp
-    # extern/FinalICP/src/trajectory/constacc/accelerationextrapolator.cpp
-    # extern/FinalICP/src/trajectory/constacc/accelerationinterpolator.cpp
-    # extern/FinalICP/src/trajectory/constacc/interface.cpp
-    # extern/FinalICP/src/trajectory/constacc/poseinterpolator.cpp
-    # extern/FinalICP/src/trajectory/constacc/posextrapolator.cpp
-    # extern/FinalICP/src/trajectory/constacc/priorfactor.cpp
-    # extern/FinalICP/src/trajectory/constacc/velocityextrapolator.cpp
-    # extern/FinalICP/src/trajectory/constacc/velocityinterpolator.cpp
+    extern/FinalICP/src/trajectory/constacc/evaluable/composecurlyhatevaluator.cpp
+    extern/FinalICP/src/trajectory/constacc/accelerationextrapolator.cpp
+    extern/FinalICP/src/trajectory/constacc/accelerationinterpolator.cpp
+    extern/FinalICP/src/trajectory/constacc/interface.cpp
+    extern/FinalICP/src/trajectory/constacc/poseinterpolator.cpp
+    extern/FinalICP/src/trajectory/constacc/posextrapolator.cpp
+    extern/FinalICP/src/trajectory/constacc/priorfactor.cpp
+    extern/FinalICP/src/trajectory/constacc/velocityextrapolator.cpp
+    extern/FinalICP/src/trajectory/constacc/velocityinterpolator.cpp
 )
 
 set(TRAJECTORY_CONSTVEL_SOURCES
-    # extern/FinalICP/src/trajectory/constvel/evaluable/jinvvelocityevaluator.cpp
-    # extern/FinalICP/src/trajectory/constvel/evaluable/jvelocityevaluator.cpp
-    # extern/FinalICP/src/trajectory/constvel/interface.cpp
-    # extern/FinalICP/src/trajectory/constvel/poseextrapolator.cpp
-    # extern/FinalICP/src/trajectory/constvel/poseinterpolator.cpp
-    # extern/FinalICP/src/trajectory/constvel/priorfactor.cpp
-    # extern/FinalICP/src/trajectory/constvel/velocityinterpolator.cpp
+    extern/FinalICP/src/trajectory/constvel/evaluable/jinvvelocityevaluator.cpp
+    extern/FinalICP/src/trajectory/constvel/evaluable/jvelocityevaluator.cpp
+    extern/FinalICP/src/trajectory/constvel/interface.cpp
+    extern/FinalICP/src/trajectory/constvel/poseextrapolator.cpp
+    extern/FinalICP/src/trajectory/constvel/poseinterpolator.cpp
+    extern/FinalICP/src/trajectory/constvel/priorfactor.cpp
+    extern/FinalICP/src/trajectory/constvel/velocityinterpolator.cpp
 )
 
 set(LGMATH_SOURCES
-    # extern/liegroupMath/src/r3/operations.cpp
-    # extern/liegroupMath/src/se3/operations.cpp
-    # extern/liegroupMath/src/se3/transformations.cpp
-    # extern/liegroupMath/src/se3/transformationswithcovariance.cpp
-    # extern/liegroupMath/src/commonmath.cpp
-    # extern/liegroupMath/src/so3/operations.cpp
-    # extern/liegroupMath/src/so3/rotations.cpp
+    extern/liegroupMath/src/r3/operations.cpp
+    extern/liegroupMath/src/se3/operations.cpp
+    extern/liegroupMath/src/se3/transformations.cpp
+    extern/liegroupMath/src/se3/transformationswithcovariance.cpp
+    extern/liegroupMath/src/commonmath.cpp
+    extern/liegroupMath/src/so3/operations.cpp
+    extern/liegroupMath/src/so3/rotations.cpp
 )
 
 set(LIDARDECODE_SOURCES
@@ -225,7 +225,7 @@ set(GNSSKOMPASS_SOURCES
 )
 
 set(FINALSTATEESTIMATION_SOURCES
-    # extern/FinalStateEstimation/src/odometry/lidarinertialodometry.cpp
+    extern/FinalStateEstimation/src/odometry/lidarinertialodometry.cpp
 )
 
 set(SLAMMING_SOURCES
