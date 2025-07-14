@@ -16,9 +16,7 @@ int main() {
     try {
         std::ifstream json_file(lidar_json);
         if (!json_file.is_open()) {
-#ifdef DEBUG
-                std::cerr << "[Main] Error: Could not open JSON file: " << lidar_json << std::endl;
-#endif
+                throw std::runtime_error("[Main] Error: Could not open JSON file: " + lidar_json);
             return EXIT_FAILURE;
         }
         nlohmann::json metadata_;
@@ -26,28 +24,20 @@ int main() {
         json_file.close(); // Explicitly close the file
 
         if (!metadata_.contains("lidar_data_format") || !metadata_["lidar_data_format"].is_object()) {
-#ifdef DEBUG
                 throw std::runtime_error("Missing or invalid 'lidar_data_format' object");
-#endif
             return EXIT_FAILURE;
         }
         if (!metadata_.contains("config_params") || !metadata_["config_params"].is_object()) {
-#ifdef DEBUG
                 throw std::runtime_error("Missing or invalid 'config_params' object");
-#endif
             return EXIT_FAILURE;
         }
         if (!metadata_.contains("beam_intrinsics") || !metadata_["beam_intrinsics"].is_object()) {
-#ifdef DEBUG
                 throw std::runtime_error("Missing or invalid 'beam_intrinsics' object");
-#endif
             return EXIT_FAILURE;
         }
         if (!metadata_.contains("lidar_intrinsics") || !metadata_["lidar_intrinsics"].is_object() ||
             !metadata_["lidar_intrinsics"].contains("lidar_to_sensor_transform")) {
-#ifdef DEBUG
                 throw std::runtime_error("Missing or invalid 'lidar_intrinsics.lidar_to_sensor_transform'");
-#endif
             return EXIT_FAILURE;
         }
 
@@ -57,9 +47,7 @@ int main() {
         udp_dest = metadata_["config_params"]["udp_dest"].get<std::string>();
 
     } catch (const std::exception& e) {
-#ifdef DEBUG
         std::cerr << "[Main] Error parsing JSON: " << e.what() << std::endl;
-#endif
         return EXIT_FAILURE;
     }
 
@@ -114,9 +102,7 @@ int main() {
 
             case LidarProfile::UNKNOWN:
             default:
-#ifdef DEBUG
                 std::cerr << "[Main] Error: Unknown or unsupported udp_profile_lidar: " << udp_profile_lidar << std::endl;
-#endif
                 return EXIT_FAILURE;
         }
 
@@ -146,14 +132,10 @@ int main() {
             }
         }
     } catch (const std::exception& e) {
-#ifdef DEBUG
         std::cerr << "Error: [Main] " << e.what() << std::endl;
-#endif
         return EXIT_FAILURE;
     }
-#ifdef DEBUG
     std::cout << "[Main] All processes stopped. Exiting program." << std::endl;
-#endif
     return EXIT_SUCCESS;
 }
 
