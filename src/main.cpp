@@ -16,7 +16,9 @@ int main() {
     try {
         std::ifstream json_file(lidar_json);
         if (!json_file.is_open()) {
-            std::cerr << "[Main] Error: Could not open JSON file: " << lidar_json << std::endl;
+#ifdef DEBUG
+                std::cerr << "[Main] Error: Could not open JSON file: " << lidar_json << std::endl;
+#endif
             return EXIT_FAILURE;
         }
         nlohmann::json metadata_;
@@ -24,20 +26,28 @@ int main() {
         json_file.close(); // Explicitly close the file
 
         if (!metadata_.contains("lidar_data_format") || !metadata_["lidar_data_format"].is_object()) {
-            throw std::runtime_error("Missing or invalid 'lidar_data_format' object");
+#ifdef DEBUG
+                throw std::runtime_error("Missing or invalid 'lidar_data_format' object");
+#endif
             return EXIT_FAILURE;
         }
         if (!metadata_.contains("config_params") || !metadata_["config_params"].is_object()) {
-            throw std::runtime_error("Missing or invalid 'config_params' object");
+#ifdef DEBUG
+                throw std::runtime_error("Missing or invalid 'config_params' object");
+#endif
             return EXIT_FAILURE;
         }
         if (!metadata_.contains("beam_intrinsics") || !metadata_["beam_intrinsics"].is_object()) {
-            throw std::runtime_error("Missing or invalid 'beam_intrinsics' object");
+#ifdef DEBUG
+                throw std::runtime_error("Missing or invalid 'beam_intrinsics' object");
+#endif
             return EXIT_FAILURE;
         }
         if (!metadata_.contains("lidar_intrinsics") || !metadata_["lidar_intrinsics"].is_object() ||
             !metadata_["lidar_intrinsics"].contains("lidar_to_sensor_transform")) {
-            throw std::runtime_error("Missing or invalid 'lidar_intrinsics.lidar_to_sensor_transform'");
+#ifdef DEBUG
+                throw std::runtime_error("Missing or invalid 'lidar_intrinsics.lidar_to_sensor_transform'");
+#endif
             return EXIT_FAILURE;
         }
 
@@ -47,7 +57,9 @@ int main() {
         udp_dest = metadata_["config_params"]["udp_dest"].get<std::string>();
 
     } catch (const std::exception& e) {
+#ifdef DEBUG
         std::cerr << "[Main] Error parsing JSON: " << e.what() << std::endl;
+#endif
         return EXIT_FAILURE;
     }
 
@@ -61,7 +73,9 @@ int main() {
     sigaction(SIGINT, &sigIntHandler, nullptr);
     sigaction(SIGTERM, &sigIntHandler, nullptr);
 
+#ifdef DEBUG
     std::cout << "[Main] Starting pipeline processes..." << std::endl;
+#endif
 
     try {
         std::vector<std::thread> threads;
@@ -82,13 +96,17 @@ int main() {
 
         switch (profile) {
             case LidarProfile::RNG19_RFL8_SIG16_NIR16:
+#ifdef DEBUG
                 std::cout << "[Main] Detected RNG19_RFL8_SIG16_NIR16 lidar udp profile." << std::endl;
+#endif
                 // Use default parameters or adjust if needed
                 threads.emplace_back([&]() { pipeline.runOusterLidarListenerSingleReturn(ioContextPoints, udp_dest_all, udp_port_lidar, lidar_packet_size, std::vector<int>{0}); });
                 break;
 
             case LidarProfile::LEGACY:
+#ifdef DEBUG
                 std::cout << "[Main] Detected LEGACY lidar udp profile." << std::endl;
+#endif
                 // Example: Adjust buffer size or port for LEGACY mode if needed
                 // bufferSize = 16384; // Example adjustment
                 threads.emplace_back([&]() { pipeline.runOusterLidarListenerLegacy(ioContextPoints, udp_dest_all, udp_port_lidar, lidar_packet_size, std::vector<int>{0}); });
@@ -96,7 +114,9 @@ int main() {
 
             case LidarProfile::UNKNOWN:
             default:
+#ifdef DEBUG
                 std::cerr << "[Main] Error: Unknown or unsupported udp_profile_lidar: " << udp_profile_lidar << std::endl;
+#endif
                 return EXIT_FAILURE;
         }
 
@@ -126,10 +146,14 @@ int main() {
             }
         }
     } catch (const std::exception& e) {
+#ifdef DEBUG
         std::cerr << "Error: [Main] " << e.what() << std::endl;
+#endif
         return EXIT_FAILURE;
     }
+#ifdef DEBUG
     std::cout << "[Main] All processes stopped. Exiting program." << std::endl;
+#endif
     return EXIT_SUCCESS;
 }
 

@@ -18,7 +18,7 @@ endif()
 
 # Find dependencies
 set(Open3D_DIR "/usr/local/lib/cmake/Open3D/" CACHE PATH "Path to Open3D CMake config")
-set(TBB_DIR "/usr/lib/x86_64-linux-gnu/cmake/TBB" CACHE PATH "Path to TBB CMake config")
+set(TBB_DIR "/usr/local/lib/cmake/TBB" CACHE PATH "Path to TBB CMake config") # Updated path
 # set(Unwind_INCLUDE_DIR /usr/include/libunwind CACHE PATH "Path to libunwind headers")
 
 # find_library(Unwind_LIBRARY NAMES libunwind.so.8 PATHS /usr/lib/x86_64-linux-gnu)
@@ -52,6 +52,14 @@ if(COMPILER_SUPPORTS_AVX2 AND COMPILER_SUPPORTS_FMA)
 else()
     message(WARNING "AVX2 or FMA not supported; using scalar implementation")
 endif()
+
+add_compile_definitions($<$CONFIG:Debug:DEBUG>)
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build." FORCE)
+endif()
+
+## cmake -DCMAKE_BUILD_TYPE=Release ..
 
 # Define include directories
 set(SLAM_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/include")

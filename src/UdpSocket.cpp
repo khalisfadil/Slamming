@@ -20,9 +20,13 @@ void UdpSocket::startReceive() {
                 std::vector<uint8_t> packetData(buffer_.begin(), buffer_.begin() + bytesReceived);
                 if (callback_) {callback_(packetData);}
             } else if (ec) {
+#ifdef DEBUG
                 std::cerr << "Receive error: " << ec.message() << " (value: " << ec.value() << ")" << std::endl;
+#endif
             } else {
+#ifdef DEBUG
                 std::cerr << "No data received (bytes: " << bytesReceived << ")" << std::endl;
+#endif
             }
             startReceive();
         }
@@ -33,6 +37,8 @@ void UdpSocket::stop() {
     boost::system::error_code ec;
     socket_.close(ec); // Close the socket
     if (ec) {
+#ifdef DEBUG
         std::cerr << "Error closing socket: " << ec.message() << std::endl;
+#endif
     }
 }

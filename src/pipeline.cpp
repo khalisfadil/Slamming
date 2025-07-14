@@ -32,9 +32,9 @@ void SLAMPipeline::signalHandler(int signal) {
         running_.store(false, std::memory_order_release);
         globalCV_.notify_all();
 
-        constexpr const char* message = "[signalHandler] Shutting down...\n";
-        constexpr size_t messageLen = sizeof(message) - 1;
-        ssize_t result = write(STDOUT_FILENO, message, messageLen);
+        // constexpr const char* message = "[signalHandler] Shutting down...\n";
+        // constexpr size_t messageLen = sizeof(message) - 1;
+        // ssize_t result = write(STDOUT_FILENO, message, messageLen);
     }
 }
 
@@ -121,9 +121,11 @@ void SLAMPipeline::runOusterLidarListenerSingleReturn(boost::asio::io_context& i
     setThreadAffinity(allowedCores); 
 
     if (host.empty() || port == 0) {
+#ifdef DEBUG
         std::ostringstream oss;
         oss << "Lidar Listener: Invalid host or port. Host: " << host << ", Port: " << port;
         logMessage("ERROR", oss.str());    
+#endif
         return;
     }
 
@@ -138,7 +140,9 @@ void SLAMPipeline::runOusterLidarListenerSingleReturn(boost::asio::io_context& i
                 this->frame_id_ = temp_lidar_data_.frame_id;
                 
                 if (!lidar_buffer_.push(std::move(temp_lidar_data_))) {
-                    logMessage("WARNING", "Lidar Listener: SPSC Lidar buffer push failed.");  
+#ifdef DEBUG
+                    logMessage("WARNING", "Lidar Listener: SPSC Lidar buffer push failed."); 
+#endif
                 }
             }
         }, bufferSize);
@@ -153,27 +157,33 @@ void SLAMPipeline::runOusterLidarListenerSingleReturn(boost::asio::io_context& i
                
                 break; 
             } catch (const std::exception& e) {
+#ifdef DEBUG
                  logMessage("WARNING", "Lidar Listener: Exception in ioContext."); 
+#endif
 
                 if (running_.load(std::memory_order_acquire)) {
                     ioContext.restart(); 
+#ifdef DEBUG
                     logMessage("WARNING", "Lidar Listener: ioContext restarted.");
-
+#endif
                 } else {
                     break; // Exit loop if shutting down.
                 }
             }
         }
     } catch(const std::exception& e){
+#ifdef DEBUG
         logMessage("WARNING", "Lidar Listener: Setup exception.");
+#endif
     }
 
     // Ensure ioContext is stopped when the listener is done or an error occurs.
     if (!ioContext.stopped()) {
         ioContext.stop();
     }
-
+#ifdef DEBUG
     logMessage("LOGGING", "Lidar Listener: listener stopped.");
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -187,9 +197,11 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
     setThreadAffinity(allowedCores); 
 
     if (host.empty() || port == 0) {
+#ifdef DEBUG
         std::ostringstream oss;
         oss << "Lidar Listener: Invalid host or port. Host: " << host << ", Port: " << port;
-        logMessage("ERROR", oss.str());      
+        logMessage("ERROR", oss.str());
+#endif 
         return;
     }
 
@@ -202,7 +214,9 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
                 this->frame_id_ = temp_lidar_data_.frame_id;
                 
                 if (!lidar_buffer_.push(std::move(temp_lidar_data_))) {
-                    logMessage("WARNING", "Lidar Listener: SPSC Lidar buffer push failed.");    
+#ifdef DEBUG
+                    logMessage("WARNING", "Lidar Listener: SPSC Lidar buffer push failed.");
+#endif
                 }
             }
            
@@ -217,11 +231,15 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
                 
                 break; 
             } catch (const std::exception& e) {
+#ifdef DEBUG
                 logMessage("ERROR", "Lidar Listener: Exception in ioContext.");
+#endif
 
                 if (running_.load(std::memory_order_acquire)) {
                     ioContext.restart(); // Restart Asio io_context to attempt recovery.
+#ifdef DEBUG
                     logMessage("LOGGING", "Lidar Listener: ioContext restarted.");
+#endif
 
                 } else {
                     break; // Exit loop if shutting down.
@@ -229,14 +247,18 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
             }
         }
     } catch(const std::exception& e){
+#ifdef DEBUG
         logMessage("ERROR", "Lidar Listener: Setup exception.");
+#endif
     }
 
     // Ensure ioContext is stopped when the listener is done or an error occurs.
     if (!ioContext.stopped()) {
         ioContext.stop();
     }
+#ifdef DEBUG
     logMessage("LOGGING", "Lidar Listener: listener stopped."); 
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -250,9 +272,11 @@ void SLAMPipeline::runOusterLidarIMUListener(boost::asio::io_context& ioContext,
     setThreadAffinity(allowedCores); // Sets affinity for this listener thread
 
     if (host.empty() || port == 0) {
+#ifdef DEBUG
         std::ostringstream oss;
         oss << "Lidar Listener: Invalid host or port. Host: " << host << ", Port: " << port;
-        logMessage("ERROR", oss.str());  
+        logMessage("ERROR", oss.str());
+#endif
         return;
     }
 
@@ -278,12 +302,16 @@ void SLAMPipeline::runOusterLidarIMUListener(boost::asio::io_context& ioContext,
                 
                 // Push the copy into the SPSC queue
                 if (!imu_vec_buffer_.push(temp_IMU_vec_data_)) {
-                    logMessage("WARNING", "IMU Listener: SPSC IMU Vec buffer push failed."); 
+#ifdef DEBUG
+                    logMessage("WARNING", "IMU Listener: SPSC IMU Vec buffer push failed.");
+#endif 
                 }
 
                 // Push the copy into the SPSC queue
                 if (!imu_buffer_.push(temp_IMU_data_)) {
+#ifdef DEBUG
                     logMessage("WARNING", "IMU Listener: SPSC IMU buffer push failed."); 
+#endif
                 }
             }  
         }, bufferSize);
@@ -297,10 +325,14 @@ void SLAMPipeline::runOusterLidarIMUListener(boost::asio::io_context& ioContext,
                 
                 break; 
             } catch (const std::exception& e) {
+#ifdef DEBUG
                 logMessage("ERROR", "IMU Listener: Exception in ioContext."); 
+#endif
                 if (running_.load(std::memory_order_acquire)) {
                     ioContext.restart();
+#ifdef DEBUG
                     logMessage("LOGGING", "IMU Listener: ioContext restarted.");  
+#endif
                 } else {
                     break; 
                 }
@@ -308,14 +340,18 @@ void SLAMPipeline::runOusterLidarIMUListener(boost::asio::io_context& ioContext,
         }
     }
     catch(const std::exception& e){
+#ifdef DEBUG
         logMessage("ERROR", "IMU Listener: Setup exception.");
+#endif
     }
 
     // Ensure ioContext is stopped when the listener is done or an error occurs.
     if (!ioContext.stopped()) {
         ioContext.stop();
     }
+#ifdef DEBUG
     logMessage("LOGGING", "IMU Listener: listener stopped.");
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -330,9 +366,11 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
     setThreadAffinity(allowedCores);
 
     if (host.empty() || port == 0) {
+#ifdef DEBUG
         std::ostringstream oss;
         oss << "ID28 Listener: Invalid host or port. Host: " << host << ", Port: " << port;
         logMessage("ERROR", oss.str());
+#endif
         return;
     }
 
@@ -342,10 +380,12 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
             if (temp_gnss_ID20_intern_data_.unixTime > 0 && temp_gnss_ID20_intern_data_.unixTime != this->unixTime) {
                 this->unixTime = temp_gnss_ID20_intern_data_.unixTime;
 
-                // debug
-                // std::ostringstream oss;
-                // oss << "ID28 Listener: Input Value. Latitude: " << temp_gnss_ID20_intern_data_.latitude << ", Longitude: " << temp_gnss_ID20_intern_data_.longitude << ", Altitude: " << temp_gnss_ID20_intern_data_.altitude;
-                // logMessage("LOGGING", oss.str());
+                
+#ifdef DEBUG
+                    std::ostringstream oss;
+                    oss << "ID28 Listener: Input Value. Latitude: " << temp_gnss_ID20_intern_data_.latitude << ", Longitude: " << temp_gnss_ID20_intern_data_.longitude << ", Altitude: " << temp_gnss_ID20_intern_data_.altitude;
+                    logMessage("LOGGING", oss.str());
+#endif
 
                 if (temp_gnss_ID20_vec_data_.size() >= VECTOR_SIZE_ID20) {
                     temp_gnss_ID20_vec_data_.erase(temp_gnss_ID20_vec_data_.begin());
@@ -353,10 +393,14 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
                 temp_gnss_ID20_vec_data_.push_back(temp_gnss_ID20_intern_data_);
 
                 if (!ID20_vec_buffer_.push(temp_gnss_ID20_vec_data_)) {
+#ifdef DEBUG
                     logMessage("WARNING", "ID20 Listener: SPSC ID20 Vec buffer push failed.");
+#endif
                 }
                 if (!ID20_buffer_.push(temp_gnss_ID20_intern_data_)) {
+#ifdef DEBUG
                     logMessage("WARNING", "ID20 Listener: SPSC ID20 buffer push failed.");
+#endif
                 }
             }
         }
@@ -368,7 +412,9 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
             gnssCallback.decode_ID20(packet_data, temp_gnss_ID20_data_);
 
             if (!ID20_intern_buffer_.push(temp_gnss_ID20_data_)) {
+#ifdef DEBUG
                 logMessage("WARNING", "ID20 Listener: SPSC ID20 intern buffer push failed.");
+#endif
             }
         }, bufferSize);
 
@@ -379,18 +425,25 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
             try {
                 ioContext.run();
             } catch (const std::exception& e) {
+#ifdef DEBUG
                 logMessage("ERROR", "ID20 Listener: Exception in I/O thread.");
+#endif
             }
+#ifdef DEBUG
             logMessage("LOGGING", "ID20 Listener: I/O thread finished.");
+#endif
         });
 
+#ifdef DEBUG
         logMessage("LOGGING", "ID20 Listener: Consumer loop started.");
+#endif
         while (running_.load(std::memory_order_acquire)) {
             processGNSSID20Frames();
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-
+#ifdef DEBUG
         logMessage("LOGGING", "ID20 Listener: Stopping I/O context.");
+#endif
         if (!ioContext.stopped()) {
             ioContext.stop();
         }
@@ -400,13 +453,16 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
 
     }
     catch(const std::exception& e){
+#ifdef DEBUG
         logMessage("ERROR", "ID20 Listener: Setup exception.");
+#endif
         if (!ioContext.stopped()) {
             ioContext.stop();
         }
     }
-
+#ifdef DEBUG
     logMessage("LOGGING", "ID20 Listener: Listener stopped.");
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -425,13 +481,17 @@ void SLAMPipeline::dataAlignmentLocalIMU(const std::vector<int>& allowedCores){
 
             lidarDecode::LidarDataFrame temp_lidar_data__;
             if (!lidar_buffer_.pop(temp_lidar_data__)) {
+#ifdef DEBUG
                 logMessage("WARNING", "DataAlignment : Failed to retrieved Lidar SPSC."); 
+#endif
                 continue;
             }
 
             // Skip if lidar data is empty
             if (temp_lidar_data__.timestamp_points.empty()) {
+#ifdef DEBUG
                 logMessage("WARNING", "DataAlignment : Empty lidar data.");
+#endif
                 continue;
             }
 
@@ -441,7 +501,9 @@ void SLAMPipeline::dataAlignmentLocalIMU(const std::vector<int>& allowedCores){
 
             // Validate lidar timestamp range
             if (min_lidar_time > max_lidar_time) {
+#ifdef DEBUG
                 logMessage("ERROR", "DataAlignment : Invalid lidar timestamp.");
+#endif
                 continue;
             }
 
@@ -453,13 +515,17 @@ void SLAMPipeline::dataAlignmentLocalIMU(const std::vector<int>& allowedCores){
                 std::vector<lidarDecode::LidarIMUDataFrame> temp_IMU_vec_data_;
 
                 if (!imu_vec_buffer_.pop(temp_IMU_vec_data_)) {
+#ifdef DEBUG
                     logMessage("WARNING", "DataAlignment : Failed to retrieved IMU vec SPSC.");
+#endif
                     break;
                 }
 
                 // Skip if IMU data is empty
                 if (temp_IMU_vec_data_.empty()) {
+#ifdef DEBUG
                     logMessage("WARNING", "DataAlignment : Empty IMU vec data.");
+#endif
                     continue;
                 }
 
@@ -469,7 +535,9 @@ void SLAMPipeline::dataAlignmentLocalIMU(const std::vector<int>& allowedCores){
 
                 // Verify IMU timestamps are valid and ordered
                 if (min_imu_time > max_imu_time) {
+#ifdef DEBUG
                     logMessage("WARNING", "DataAlignment : Invalid IMU timestamp.");
+#endif
                     continue;
                 }
 
@@ -477,15 +545,18 @@ void SLAMPipeline::dataAlignmentLocalIMU(const std::vector<int>& allowedCores){
                 if (min_lidar_time >= min_imu_time && max_lidar_time <= max_imu_time) {
                     // Timestamps are aligned; process the data
                     aligned = true;
-
+#ifdef DEBUG
                     logMessage("WARNING", "DataAlignment : Timestamps Lidar and IMU are aligned.");
+#endif
 
                     LidarIMUVecDataFrame temp_lidar_IMU_vec_data_;
                     temp_lidar_IMU_vec_data_.IMUVec = temp_IMU_vec_data_;
                     temp_lidar_IMU_vec_data_.Lidar = temp_lidar_data__;
 
                     if (!lidar_imu_buffer_.push(std::move(temp_lidar_IMU_vec_data_))) {
+#ifdef DEBUG
                         logMessage("WARNING", "DataAlignment : SPSC Lidar and IMU Vec buffer push failed.");
+#endif
                     }
                     
                 } else if (min_lidar_time > min_imu_time && max_lidar_time > max_imu_time){
@@ -494,12 +565,16 @@ void SLAMPipeline::dataAlignmentLocalIMU(const std::vector<int>& allowedCores){
                 } else if (min_lidar_time < min_imu_time){
                     // Lidar impossible to catch up with the IMU timestamp, need to discard this Lidar frame.
                     // Potential Solution, increase the size buffer frame.
+#ifdef DEBUG
                     logMessage("ERROR", "DataAlignment : Lidar cannot catch up with IMU data, please increase Buffer size.");
+#endif
                     break;                       
                 }
             }
         } catch (const std::exception& e) {
+#ifdef DEBUG
             logMessage("ERROR", "DataAlignment : Exception occurred.");
+#endif
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
@@ -516,19 +591,26 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
         try {
             // If no lidar data is available, wait briefly and retry
             if (lidar_buffer_.empty()) {
+#ifdef DEBUG
+                logMessage("WARNING", "DataAlignment ID20 : Lidar Buffer empty."); 
+#endif
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             }
 
             lidarDecode::LidarDataFrame temp_lidar_data__;
             if (!lidar_buffer_.pop(temp_lidar_data__)) {
+#ifdef DEBUG
                 logMessage("WARNING", "DataAlignment ID20 : Failed to retrieved Lidar SPSC."); 
+#endif
                 continue;
             }
 
             // Skip if lidar data is empty
             if (temp_lidar_data__.timestamp_points.empty()) {
+#ifdef DEBUG
                 logMessage("WARNING", "DataAlignment ID20 : Empty lidar data.");
+#endif
                 continue;
             }
 
@@ -536,16 +618,19 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
             double min_lidar_time = temp_lidar_data__.timestamp_points.front();
             double max_lidar_time = temp_lidar_data__.timestamp_points.back();
 
-            // debug
-            // logMessage("LOGGING", "New Lidar Frame.");
-            // std::ostringstream oss;
-            // oss << std::fixed << std::setprecision(12);
-            // oss << "DataAlignment ID20 : Lidar Time. Min: " << min_lidar_time << ", Max: " << max_lidar_time;
-            // logMessage("LOGGING", oss.str());
+#ifdef DEBUG
+                logMessage("LOGGING", "New Lidar Frame.");
+                std::ostringstream oss;
+                oss << std::fixed << std::setprecision(12);
+                oss << "DataAlignment ID20 : Lidar Time. Min: " << min_lidar_time << ", Max: " << max_lidar_time;
+                logMessage("LOGGING", oss.str());
+#endif
 
             // Validate lidar timestamp range
             if (min_lidar_time > max_lidar_time) {
+#ifdef DEBUG
                 logMessage("ERROR", "DataAlignment ID20 : Invalid lidar timestamp.");
+#endif
                 continue;
             }
 
@@ -557,13 +642,17 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
                 std::vector<decodeNav::DataFrameID20> temp_gnss_ID20_vec_data__;
 
                 if (!ID20_vec_buffer_.pop(temp_gnss_ID20_vec_data__)) {
+#ifdef DEBUG
                     logMessage("WARNING", "DataAlignment ID20 : Failed to retrieved IMU vec SPSC.");
+#endif
                     break;
                 }
 
                 // Skip if IMU data is empty
                 if (temp_gnss_ID20_vec_data__.empty()) {
+#ifdef DEBUG
                     logMessage("WARNING", "DataAlignment ID20 : Empty ID20 vec data.");
+#endif
                     break;
                 }
 
@@ -571,15 +660,18 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
                 double min_id20_time = temp_gnss_ID20_vec_data__.front().unixTime;
                 double max_id20_time = temp_gnss_ID20_vec_data__.back().unixTime;
 
-                // debug
-                // std::ostringstream oss;
-                // oss << std::fixed << std::setprecision(12);
-                // oss << "DataAlignment ID20 : Compass Time. Min: " << min_id20_time << ", Max: " << max_id20_time;
-                // logMessage("LOGGING", oss.str());
+#ifdef DEBUG
+                    std::ostringstream oss;
+                    oss << std::fixed << std::setprecision(12);
+                    oss << "DataAlignment ID20 : Compass Time. Min: " << min_id20_time << ", Max: " << max_id20_time;
+                    logMessage("LOGGING", oss.str());   
+#endif
 
                 // Verify IMU timestamps are valid and ordered
                 if (min_id20_time > max_id20_time) {
+#ifdef DEBUG
                     logMessage("WARNING", "DataAlignment ID20 : Invalid ID20 timestamp.");
+#endif
                     continue;
                 }
 
@@ -587,8 +679,9 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
                 if (min_lidar_time >= min_id20_time && max_lidar_time <= max_id20_time) {
                     // Timestamps are aligned; process the data
                     aligned = true;
-
+#ifdef DEBUG
                     logMessage("LOGGING", "DataAlignment ID20 : Timestamps Lidar and ID20 are aligned.");
+#endif
 
                     // Filter temp_gnss_ID20_vec_data__ to include only readings within min_lidar_time and max_lidar_time
                     std::vector<decodeNav::DataFrameID20> filtered_gnss_ID20_vec_data__;
@@ -604,18 +697,21 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
                     double max_filtered_id20_time = filtered_gnss_ID20_vec_data__.back().unixTime;
 
                     if (min_filtered_id20_time >= min_lidar_time && max_filtered_id20_time <= max_lidar_time){
-                        // Debug
-                        // std::ostringstream oss;
-                        // oss << std::fixed << std::setprecision(12);
-                        // oss << "DataAlignment ID20 : Compass Time. Min: " << filtered_gnss_ID20_vec_data__.front().unixTime << ", Max: " << filtered_gnss_ID20_vec_data__.back().unixTime << ", Size: " << filtered_gnss_ID20_vec_data__.size();
-                        // logMessage("LOGGING", oss.str());
+#ifdef DEBUG
+                            std::ostringstream oss;
+                            oss << std::fixed << std::setprecision(12);
+                            oss << "DataAlignment ID20 : Filtered Compass Time. Min: " << filtered_gnss_ID20_vec_data__.front().unixTime << ", Max: " << filtered_gnss_ID20_vec_data__.back().unixTime << ", Size: " << filtered_gnss_ID20_vec_data__.size();
+                            logMessage("LOGGING", oss.str());
+#endif
 
                         LidarID20VecDataFrame temp_lidar_ID20_vec_data_;
                         temp_lidar_ID20_vec_data_.ID20Vec = std::move(filtered_gnss_ID20_vec_data__); // Use filtered data
                         temp_lidar_ID20_vec_data_.Lidar = temp_lidar_data__;
 
                         if (!lidar_ID20_buffer_.push(std::move(temp_lidar_ID20_vec_data_))) {
+#ifdef DEBUG
                             logMessage("WARNING", "DataAlignment ID20 : SPSC Lidar and ID20 Vec buffer push failed.");
+#endif
                         }
                     }
                     
@@ -625,12 +721,16 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
                 } else {
                     // Lidar impossible to catch up with the IMU timestamp, need to discard this Lidar frame.
                     // Potential Solution, increase the size buffer frame.
+#ifdef DEBUG
                     logMessage("ERROR", "DataAlignment ID20 : Lidar cannot catch up with ID20 data, please increase Buffer size.");
+#endif
                     break;                       
                 }
             }
         } catch (const std::exception& e) {
+#ifdef DEBUG
             logMessage("ERROR", "DataAlignment ID20 : Exception occurred.");
+#endif
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
