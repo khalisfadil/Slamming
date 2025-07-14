@@ -53,7 +53,7 @@ else()
     message(WARNING "AVX2 or FMA not supported; using scalar implementation")
 endif()
 
-add_compile_definitions($<$CONFIG:Debug:DEBUG>)
+#add_compile_definitions($<$CONFIG:Debug:DEBUG>)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build." FORCE)
