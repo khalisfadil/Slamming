@@ -271,7 +271,7 @@ target_link_libraries(slam_core
         Boost::thread
         Open3D::Open3D
         Threads::Threads
-        ${Unwind_LIBRARY}
+        # ${Unwind_LIBRARY}
     PRIVATE
         $<$<BOOL:${CPUID_LIBRARY}>:${CPUID_LIBRARY}>
 )

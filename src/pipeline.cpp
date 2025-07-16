@@ -739,15 +739,24 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
 
 // -----------------------------------------------------------------------------
 
-// void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
-//     setThreadAffinity(allowedCores);
+void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
+    setThreadAffinity(allowedCores);
+    while (running_.load(std::memory_order_acquire)) {
+        try {
 
-//     try {
+            LidarID20VecDataFrame temp_lidar_ID20_vec_data_;
+            if (!lidar_ID20_buffer_.pop(temp_lidar_ID20_vec_data_)) {
+#ifdef DEBUG
+                logMessage("WARNING", "runLioStateEstimation : Failed to retrieved LidarID20 SPSC."); 
+#endif
+                continue;
+            }
 
-//     } catch (const std::exception& e) {
+        } catch (const std::exception& e) {
 
-//     }
-// }
+        }
+    }
+}
 
 // // -----------------------------------------------------------------------------
 

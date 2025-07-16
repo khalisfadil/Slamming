@@ -78,7 +78,7 @@ class SLAMPipeline {
         // application for slam
         void dataAlignmentLocalIMU(const std::vector<int>& allowedCores);
         void dataAlignmentID20(const std::vector<int>& allowedCores);
-        // void runLioStateEstimation(const std::vector<int>& allowedCores);
+        void runLioStateEstimation(const std::vector<int>& allowedCores);
         
         // application for DynamicMapping
         // void runDynamicMapping(const std::vector<int>& allowedCores);
