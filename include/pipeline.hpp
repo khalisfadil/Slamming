@@ -27,6 +27,8 @@
 #include <DataFrame_ID28.hpp>
 #include <DataFrame_ID29.hpp>
 
+#include <navMath.hpp> // for navigation message math
+
 class SLAMPipeline {
 
     struct LidarIMUVecDataFrame {
@@ -79,6 +81,7 @@ class SLAMPipeline {
         void dataAlignmentLocalIMU(const std::vector<int>& allowedCores);
         void dataAlignmentID20(const std::vector<int>& allowedCores);
         void runLioStateEstimation(const std::vector<int>& allowedCores);
+        void runGroundTruthEstimation(const std::vector<int>& allowedCores);
         
         // application for DynamicMapping
         // void runDynamicMapping(const std::vector<int>& allowedCores);
@@ -86,15 +89,18 @@ class SLAMPipeline {
     private:
 
         // finalState
-        stateestimate::lidarinertialodom lioOdometry;
+        // stateestimate::lidarinertialodom lioOdometry;
+        stateestimate::Odometry::Ptr odometry_; 
+        const size_t GT_SIZE_COMPASS = 120000;
+        bool has_previous_frame_;
 
         // runOusterLidarListener
-        lidarDecode::OusterLidarCallback lidarCallback;
+        lidarDecode::OusterLidarCallback lidarCallback_;
         lidarDecode::LidarDataFrame temp_lidar_data_;
         uint16_t frame_id_= 0;
 
         //runGNSSListener
-        decodeNav::GnssCompassCallback gnssCallback;
+        decodeNav::GnssCompassCallback gnssCallback_;
         // decodeNav::DataFrameID20 temp_gnss_ID20_data_;
         std::vector<decodeNav::DataFrameID20> temp_gnss_ID20_vec_data_;
         double unixTime = 0.0;

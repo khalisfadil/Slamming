@@ -21,8 +21,15 @@ void SLAMPipeline::logMessage(const std::string& level, const std::string& messa
 // -----------------------------------------------------------------------------
 
 SLAMPipeline::SLAMPipeline(const std::string& odom_json_path, const std::string& lidar_json_path) 
-    : lioOdometry(odom_json_path), lidarCallback(lidar_json_path){
+    : odometry_(stateestimate::Odometry::Get("SLAM_LIDAR_INERTIAL_ODOM", odom_json_path)), // <-- INITIALIZE HERE, 
+    lidarCallback_(lidar_json_path) {// You can initialize other members here too
+    
     temp_IMU_vec_data_.reserve(VECTOR_SIZE_IMU);
+    odometry_->T_i_r_gt_poses.reserve(GT_SIZE_COMPASS);
+
+#ifdef DEBUG
+    logMessage("LOGGING", "SLAMPipeline and Odometry object initialized.");
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -133,7 +140,7 @@ void SLAMPipeline::runOusterLidarListenerSingleReturn(boost::asio::io_context& i
 
         UdpSocket listener(ioContext, host, port, [&](const std::vector<uint8_t>& packet_data) {
 
-            lidarCallback.decode_packet_single_return(packet_data, temp_lidar_data_);
+            lidarCallback_.decode_packet_single_return(packet_data, temp_lidar_data_);
            
             if (temp_lidar_data_.numberpoints > 0 && temp_lidar_data_.frame_id != this->frame_id_) {
 
@@ -208,7 +215,7 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
     try {
         UdpSocket listener(ioContext, host, port, [&](const std::vector<uint8_t>& packet_data) {
            
-            lidarCallback.decode_packet_legacy(packet_data, temp_lidar_data_);
+            lidarCallback_.decode_packet_legacy(packet_data, temp_lidar_data_);
 
             if (temp_lidar_data_.numberpoints > 0 && temp_lidar_data_.frame_id != this->frame_id_) {
                 this->frame_id_ = temp_lidar_data_.frame_id;
@@ -284,7 +291,7 @@ void SLAMPipeline::runOusterLidarIMUListener(boost::asio::io_context& ioContext,
         UdpSocket listener(ioContext, host, port,[&](const std::vector<uint8_t>& packet_data) {
 
             // Decode the packet into frame_data_IMU_copy
-            lidarCallback.decode_packet_LidarIMU(packet_data, temp_IMU_data_);
+            lidarCallback_.decode_packet_LidarIMU(packet_data, temp_IMU_data_);
 
             // Check if the frame is valid
             if (temp_IMU_data_.Normalized_Timestamp_s > 0 && 
@@ -409,7 +416,7 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
     try {
         UdpSocket listener(ioContext, host, port,[&](const std::vector<uint8_t>& packet_data) {
             decodeNav::DataFrameID20 temp_gnss_ID20_data_;
-            gnssCallback.decode_ID20(packet_data, temp_gnss_ID20_data_);
+            gnssCallback_.decode_ID20(packet_data, temp_gnss_ID20_data_);
 
             if (!ID20_intern_buffer_.push(temp_gnss_ID20_data_)) {
 #ifdef DEBUG
@@ -760,15 +767,70 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
 
 // // -----------------------------------------------------------------------------
 
-// void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
-//     setThreadAffinity(allowedCores);
+void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores) {
+    setThreadAffinity(allowedCores);
 
-//     try {
+    // For performance, you should reserve memory once in your SLAMPipeline constructor
+    // odometry_->T_i_r_gt_poses.reserve(60000); // e.g., for 10 minutes at 100Hz
 
-//     } catch (const std::exception& e) {
+    while (running_.load(std::memory_order_acquire)) {
+        try {
+            decodeNav::DataFrameID20 current_frame;
+            if (!ID20_buffer_.pop(current_frame)) {
+                // No data, wait briefly
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                continue;
+            }
 
-//     }
-// }
+            if (!has_previous_frame_) {
+                // --- Handle the very first frame ---
+                Eigen::Matrix3d R_initial_world = navMath::NavMath::Cb2n(navMath::NavMath::getQuat(
+                    current_frame.roll, current_frame.pitch, current_frame.yaw
+                ));
+
+                Eigen::Matrix4d T_initial_world = Eigen::Matrix4d::Identity();
+                T_initial_world.block<3, 3>(0, 0) = R_initial_world;
+
+                // Initialize the global pose state
+                current_global_pose_ = T_initial_world;
+
+                // Append this first, correct absolute pose to the main vector
+                odometry_->T_i_r_gt_poses.push_back(current_global_pose_);
+
+                // Set trackers for the next iteration
+                previous_id20_frame_ = current_frame;
+                has_previous_frame_ = true;
+
+            } else {
+                // --- Handle all subsequent frames ---
+                Eigen::Vector3d relative_position = navMath::NavMath::LLA2NED(
+                    current_frame.latitude, current_frame.longitude, current_frame.altitude,
+                    previous_id20_frame_.latitude, previous_id20_frame_.longitude, previous_id20_frame_.altitude
+                );
+
+                Eigen::Matrix3d R_curr_world = navMath::NavMath::Cb2n(navMath::NavMath::getQuat(current_frame.roll, current_frame.pitch, current_frame.yaw));
+                Eigen::Matrix3d R_prev_world = navMath::NavMath::Cb2n(navMath::NavMath::getQuat(previous_id20_frame_.roll, previous_id20_frame_.pitch, previous_id20_frame_.yaw));
+                Eigen::Matrix3d R_relative = R_prev_world.transpose() * R_curr_world;
+                
+                Eigen::Matrix4d T_relative = Eigen::Matrix4d::Identity();
+                T_relative.block<3, 3>(0, 0) = R_relative;
+                T_relative.block<3, 1>(0, 3) = relative_position;
+
+                // Accumulate the pose
+                current_global_pose_ = current_global_pose_ * T_relative;
+                
+                // Append the new global pose to the main vector
+                odometry_->T_i_r_gt_poses.push_back(current_global_pose_);
+
+                // Update the previous frame for the next iteration
+                previous_id20_frame_ = current_frame;
+            }
+
+        } catch (const std::exception& e) {
+            logMessage("ERROR", "Exception in runGroundTruthEstimation: " + std::string(e.what()));
+        }
+    }
+}
 
 // // -----------------------------------------------------------------------------
 
