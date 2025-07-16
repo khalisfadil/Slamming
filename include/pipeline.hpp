@@ -92,7 +92,9 @@ class SLAMPipeline {
         // stateestimate::lidarinertialodom lioOdometry;
         stateestimate::Odometry::Ptr odometry_; 
         const size_t GT_SIZE_COMPASS = 120000;
-        bool has_previous_frame_;
+        bool has_previous_frame_ = false;
+        Eigen::Matrix4d current_global_pose_ = Eigen::Matrix4d::Identity();
+        decodeNav::DataFrameID20 previous_id20_frame_;
 
         // runOusterLidarListener
         lidarDecode::OusterLidarCallback lidarCallback_;

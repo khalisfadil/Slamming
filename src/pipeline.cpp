@@ -759,6 +759,8 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                 continue;
             }
 
+            
+
         } catch (const std::exception& e) {
 
         }
@@ -784,7 +786,7 @@ void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores
 
             if (!has_previous_frame_) {
                 // --- Handle the very first frame ---
-                Eigen::Matrix3d R_initial_world = navMath::NavMath::Cb2n(navMath::NavMath::getQuat(
+                Eigen::Matrix3d R_initial_world = navMath::Cb2n(navMath::getQuat(
                     current_frame.roll, current_frame.pitch, current_frame.yaw
                 ));
 
@@ -803,13 +805,13 @@ void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores
 
             } else {
                 // --- Handle all subsequent frames ---
-                Eigen::Vector3d relative_position = navMath::NavMath::LLA2NED(
+                Eigen::Vector3d relative_position = navMath::LLA2NED(
                     current_frame.latitude, current_frame.longitude, current_frame.altitude,
                     previous_id20_frame_.latitude, previous_id20_frame_.longitude, previous_id20_frame_.altitude
                 );
 
-                Eigen::Matrix3d R_curr_world = navMath::NavMath::Cb2n(navMath::NavMath::getQuat(current_frame.roll, current_frame.pitch, current_frame.yaw));
-                Eigen::Matrix3d R_prev_world = navMath::NavMath::Cb2n(navMath::NavMath::getQuat(previous_id20_frame_.roll, previous_id20_frame_.pitch, previous_id20_frame_.yaw));
+                Eigen::Matrix3d R_curr_world = navMath::Cb2n(navMath::getQuat(current_frame.roll, current_frame.pitch, current_frame.yaw));
+                Eigen::Matrix3d R_prev_world = navMath::Cb2n(navMath::getQuat(previous_id20_frame_.roll, previous_id20_frame_.pitch, previous_id20_frame_.yaw));
                 Eigen::Matrix3d R_relative = R_prev_world.transpose() * R_curr_world;
                 
                 Eigen::Matrix4d T_relative = Eigen::Matrix4d::Identity();
