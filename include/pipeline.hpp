@@ -100,7 +100,7 @@ class SLAMPipeline {
         Eigen::Matrix3d previous_R_world_;
 
         // runLioStateEstimation
-        bool first_frame_ = true;
+        bool initialized_initial_pose_ = false;
 
         // runOusterLidarListener
         lidarDecode::OusterLidarCallback lidarCallback_;
