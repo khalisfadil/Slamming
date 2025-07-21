@@ -748,9 +748,10 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
 
 void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
     setThreadAffinity(allowedCores);
+    tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads_);
     while (running_.load(std::memory_order_acquire)) {
         try {
-
+            
             LidarID20VecDataFrame temp_lidar_ID20_vec_data_;
             if (!lidar_ID20_buffer_.pop(temp_lidar_ID20_vec_data_)) {
 #ifdef DEBUG
@@ -759,7 +760,54 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                 continue;
             }
 
+            stateestimate::DataFrame currDataFrame;
+            std::vector<lidarDecode::Point3D> temp_lidar_frame = temp_lidar_ID20_vec_data_.Lidar.toPoint3D();
             
+            // Use tbb::parallel_invoke to run both conversion tasks concurrently
+            tbb::parallel_invoke(
+                [&] {
+                    // --- Task 1: Parallel LiDAR Point Cloud Conversion (still beneficial) ---
+                    currDataFrame.pointcloud.resize(temp_lidar_frame.size());
+                    
+                    tbb::parallel_for(tbb::blocked_range<size_t>(0, temp_lidar_frame.size()),
+                        [&](const tbb::blocked_range<size_t>& r) {
+                            for (size_t i = r.begin(); i != r.end(); ++i) {
+                                // ... (point cloud data assignment) ...
+                                currDataFrame.pointcloud[i].raw_pt = temp_lidar_frame[i].raw_pt;
+                                currDataFrame.pointcloud[i].pt = temp_lidar_frame[i].pt;
+                                currDataFrame.pointcloud[i].radial_velocity = temp_lidar_frame[i].radial_velocity;
+                                currDataFrame.pointcloud[i].alpha_timestamp = temp_lidar_frame[i].alpha_timestamp;
+                                currDataFrame.pointcloud[i].timestamp = temp_lidar_frame[i].timestamp;
+                                currDataFrame.pointcloud[i].beam_id = temp_lidar_frame[i].beam_id;
+                            }
+                        }
+                    );
+                },
+                [&] {
+                    // --- Task 2: Sequential IMU Data Conversion (more efficient for small N) ---
+                    const auto& imu_source_vec = temp_lidar_ID20_vec_data_.ID20Vec;
+                    currDataFrame.imu_data_vec.resize(imu_source_vec.size());
+                    
+                    // A simple sequential loop is faster here due to low iteration count
+                    for (size_t i = 0; i < imu_source_vec.size(); ++i) {
+                        currDataFrame.imu_data_vec[i].lin_acc = Eigen::Vector3d(
+                            static_cast<double>(imu_source_vec[i].accelX),
+                            static_cast<double>(imu_source_vec[i].accelY),
+                            static_cast<double>(imu_source_vec[i].accelZ)
+                        );
+                        currDataFrame.imu_data_vec[i].ang_vel = Eigen::Vector3d(
+                            static_cast<double>(imu_source_vec[i].angularVelocityX),
+                            static_cast<double>(imu_source_vec[i].angularVelocityY),
+                            static_cast<double>(imu_source_vec[i].angularVelocityZ)
+                        );
+                        currDataFrame.imu_data_vec[i].timestamp = imu_source_vec[i].unixTime;
+                    }
+                }
+            ); // End of parallel_invoke
+
+            // ################################# MAIN !!!!
+            const auto summary = odometry_->registerFrame(currDataFrame);
+
 
         } catch (const std::exception& e) {
 
@@ -772,31 +820,25 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
 void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores) {
     setThreadAffinity(allowedCores);
 
-    // For performance, you should reserve memory once in your SLAMPipeline constructor
-    // odometry_->T_i_r_gt_poses.reserve(60000); // e.g., for 10 minutes at 100Hz
-
     while (running_.load(std::memory_order_acquire)) {
         try {
             decodeNav::DataFrameID20 current_frame;
             if (!ID20_buffer_.pop(current_frame)) {
-                // No data, wait briefly
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 continue;
             }
 
             if (!has_previous_frame_) {
                 // --- Handle the very first frame ---
-                Eigen::Matrix3d R_initial_world = navMath::Cb2n(navMath::getQuat(
+                // Calculate and cache the initial rotation
+                previous_R_world_ = navMath::Cb2n(navMath::getQuat(
                     current_frame.roll, current_frame.pitch, current_frame.yaw
                 ));
 
-                Eigen::Matrix4d T_initial_world = Eigen::Matrix4d::Identity();
-                T_initial_world.block<3, 3>(0, 0) = R_initial_world;
-
                 // Initialize the global pose state
-                current_global_pose_ = T_initial_world;
+                current_global_pose_ = Eigen::Matrix4d::Identity();
+                current_global_pose_.block<3, 3>(0, 0) = previous_R_world_;
 
-                // Append this first, correct absolute pose to the main vector
                 odometry_->T_i_r_gt_poses.push_back(current_global_pose_);
 
                 // Set trackers for the next iteration
@@ -805,27 +847,31 @@ void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores
 
             } else {
                 // --- Handle all subsequent frames ---
+                // OPTIMIZATION 1: Avoid re-calculating the previous rotation matrix
+                Eigen::Matrix3d R_curr_world = navMath::Cb2n(navMath::getQuat(
+                    current_frame.roll, current_frame.pitch, current_frame.yaw
+                ));
+                Eigen::Matrix3d R_relative = previous_R_world_.transpose() * R_curr_world;
+
                 Eigen::Vector3d relative_position = navMath::LLA2NED(
                     current_frame.latitude, current_frame.longitude, current_frame.altitude,
                     previous_id20_frame_.latitude, previous_id20_frame_.longitude, previous_id20_frame_.altitude
                 );
 
-                Eigen::Matrix3d R_curr_world = navMath::Cb2n(navMath::getQuat(current_frame.roll, current_frame.pitch, current_frame.yaw));
-                Eigen::Matrix3d R_prev_world = navMath::Cb2n(navMath::getQuat(previous_id20_frame_.roll, previous_id20_frame_.pitch, previous_id20_frame_.yaw));
-                Eigen::Matrix3d R_relative = R_prev_world.transpose() * R_curr_world;
+                // OPTIMIZATION 2: Decompose the 4x4 multiplication for fewer operations
+                // Old pose components
+                Eigen::Matrix3d R_global_old = current_global_pose_.block<3, 3>(0, 0);
+                Eigen::Vector3d t_global_old = current_global_pose_.block<3, 1>(0, 3);
                 
-                Eigen::Matrix4d T_relative = Eigen::Matrix4d::Identity();
-                T_relative.block<3, 3>(0, 0) = R_relative;
-                T_relative.block<3, 1>(0, 3) = relative_position;
-
-                // Accumulate the pose
-                current_global_pose_ = current_global_pose_ * T_relative;
+                // New pose components: t_new = R_old * t_rel + t_old
+                current_global_pose_.block<3, 3>(0, 0) = R_global_old * R_relative;
+                current_global_pose_.block<3, 1>(0, 3) = R_global_old * relative_position + t_global_old;
                 
-                // Append the new global pose to the main vector
                 odometry_->T_i_r_gt_poses.push_back(current_global_pose_);
 
-                // Update the previous frame for the next iteration
+                // Update trackers for the next iteration
                 previous_id20_frame_ = current_frame;
+                previous_R_world_ = R_curr_world; // Cache the current rotation for the next loop
             }
 
         } catch (const std::exception& e) {

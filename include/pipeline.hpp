@@ -29,6 +29,9 @@
 
 #include <navMath.hpp> // for navigation message math
 
+#include <tbb/parallel_invoke.h>
+#include <tbb/parallel_for.h>
+
 class SLAMPipeline {
 
     struct LidarIMUVecDataFrame {
@@ -95,6 +98,7 @@ class SLAMPipeline {
         bool has_previous_frame_ = false;
         Eigen::Matrix4d current_global_pose_ = Eigen::Matrix4d::Identity();
         decodeNav::DataFrameID20 previous_id20_frame_;
+        Eigen::Matrix3d previous_R_world_;
 
         // runOusterLidarListener
         lidarDecode::OusterLidarCallback lidarCallback_;
@@ -115,5 +119,7 @@ class SLAMPipeline {
 
         // runOusterLidarIMUListener
         uint64_t Normalized_Timestamp_s_ = 0.0;
+
+        unsigned int num_threads_ = 4;
 
 }; // namespace SLAMPipeline
