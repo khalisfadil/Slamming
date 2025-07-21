@@ -382,43 +382,46 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
     }
 
     auto processGNSSID20Frames = [&]() {
-        decodeNav::DataFrameID20 temp_gnss_ID20_intern_data_;
-        if (ID20_intern_buffer_.pop(temp_gnss_ID20_intern_data_)) {
-            if (temp_gnss_ID20_intern_data_.unixTime > 0 && temp_gnss_ID20_intern_data_.unixTime != this->unixTime) {
-                this->unixTime = temp_gnss_ID20_intern_data_.unixTime;
-
+        decodeNav::DataFrameID20 new_frame;
+        if (gnss_intern_buffer_.pop(new_frame)) {
+            if (new_frame.unixTime > 0 && new_frame.unixTime != this->unixTime) { // this part make sure no NAN value of new frame is readed.
+                this->unixTime = new_frame.unixTime;
                 
 #ifdef DEBUG
                     std::ostringstream oss;
-                    oss << "ID28 Listener: Input Value. Latitude: " << temp_gnss_ID20_intern_data_.latitude << ", Longitude: " << temp_gnss_ID20_intern_data_.longitude << ", Altitude: " << temp_gnss_ID20_intern_data_.altitude;
+                    oss << "ID28 Listener: Input Value. Latitude: " << new_frame.latitude << ", Longitude: " << temp_gnss_ID20_intern_data_.longitude << ", Altitude: " << temp_gnss_ID20_intern_data_.altitude;
                     logMessage("LOGGING", oss.str());
 #endif
-
-                if (temp_gnss_ID20_vec_data_.size() >= VECTOR_SIZE_ID20) {
-                    temp_gnss_ID20_vec_data_.erase(temp_gnss_ID20_vec_data_.begin());
+                // **OPTIMIZATION 1: Use pop_front() on the deque.**
+                // When full, remove the oldest element (O(1) operation).
+                if (gnss_data_window_.size() >= DATA_SIZE_GNSS) {
+                    gnss_data_window_.pop_front();
                 }
-                temp_gnss_ID20_vec_data_.push_back(temp_gnss_ID20_intern_data_);
+                gnss_data_window_.push_back(new_frame);
 
-                if (!ID20_vec_buffer_.push(temp_gnss_ID20_vec_data_)) {
+                if (gnss_data_window_.size() == DATA_SIZE_GNSS) {
+                    if (!gnss_window_buffer_.push(gnss_data_window_)) {
 #ifdef DEBUG
-                    logMessage("WARNING", "ID20 Listener: SPSC ID20 Vec buffer push failed.");
+                        logMessage("WARNING", "ID20 Listener: SPSC ID20 Vec buffer push failed.");
 #endif
-                }
-                if (!ID20_buffer_.push(temp_gnss_ID20_intern_data_)) {
+                    }
+                    if (!gnss_buffer_.push(new_frame)) {
 #ifdef DEBUG
                     logMessage("WARNING", "ID20 Listener: SPSC ID20 buffer push failed.");
 #endif
+                    }
                 }
+                
             }
         }
     };
 
     try {
         UdpSocket listener(ioContext, host, port,[&](const std::vector<uint8_t>& packet_data) {
-            decodeNav::DataFrameID20 temp_gnss_ID20_data_;
-            gnssCallback_.decode_ID20(packet_data, temp_gnss_ID20_data_);
+            decodeNav::DataFrameID20 new_frame;
+            gnssCallback_.decode_ID20(packet_data, new_frame);
 
-            if (!ID20_intern_buffer_.push(temp_gnss_ID20_data_)) {
+            if (!gnss_intern_buffer_.push(new_frame)) {
 #ifdef DEBUG
                 logMessage("WARNING", "ID20 Listener: SPSC ID20 intern buffer push failed.");
 #endif
@@ -590,156 +593,106 @@ void SLAMPipeline::dataAlignmentLocalIMU(const std::vector<int>& allowedCores){
 
 // -----------------------------------------------------------------------------
 
-void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores){
-
+void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
     setThreadAffinity(allowedCores);
 
     while (running_.load(std::memory_order_acquire)) {
         try {
-            // If no lidar data is available, wait briefly and retry
-            if (lidar_buffer_.empty()) {
-#ifdef DEBUG
-                logMessage("WARNING", "DataAlignment ID20 : Lidar Buffer empty."); 
-#endif
+            // 1. Pop a LiDAR frame from the buffer
+            lidarDecode::LidarDataFrame lidar_frame;
+            if (!lidar_buffer_.pop(lidar_frame) || lidar_frame.timestamp_points.empty()) {
+                // If pop fails or the frame is empty, wait and try again
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             }
 
-            lidarDecode::LidarDataFrame temp_lidar_data__;
-            if (!lidar_buffer_.pop(temp_lidar_data__)) {
-#ifdef DEBUG
-                logMessage("WARNING", "DataAlignment ID20 : Failed to retrieved Lidar SPSC."); 
-#endif
-                continue;
-            }
+            // 2. Get the time range for the LiDAR scan
+            // Data is sorted, so we only need the first and last points.
+            const double min_lidar_time = lidar_frame.timestamp_points.front();
+            const double max_lidar_time = lidar_frame.timestamp_points.back();
 
-            // Skip if lidar data is empty
-            if (temp_lidar_data__.timestamp_points.empty()) {
-#ifdef DEBUG
-                logMessage("WARNING", "DataAlignment ID20 : Empty lidar data.");
-#endif
-                continue;
-            }
-
-            // Get min and max lidar timestamps (sorted, so use front and back)
-            double min_lidar_time = temp_lidar_data__.timestamp_points.front();
-            double max_lidar_time = temp_lidar_data__.timestamp_points.back();
-
-#ifdef DEBUG
-                logMessage("LOGGING", "New Lidar Frame.");
-                std::ostringstream oss;
-                oss << std::fixed << std::setprecision(12);
-                oss << "DataAlignment ID20 : Lidar Time. Min: " << min_lidar_time << ", Max: " << max_lidar_time;
-                logMessage("LOGGING", oss.str());
-#endif
-
-            // Validate lidar timestamp range
             if (min_lidar_time > max_lidar_time) {
 #ifdef DEBUG
-                logMessage("ERROR", "DataAlignment ID20 : Invalid lidar timestamp.");
+                logMessage("ERROR", "DataAlignment ID20: Invalid lidar timestamp range.");
 #endif
                 continue;
             }
 
-            // Loop to find an IMU vector that aligns with the current lidar frame
+            // 3. Find a corresponding IMU data packet
             bool aligned = false;
-
-            while (!aligned && ID20_vec_buffer_.read_available() > 0){
-
-                std::vector<decodeNav::DataFrameID20> temp_gnss_ID20_vec_data__;
-
-                if (!ID20_vec_buffer_.pop(temp_gnss_ID20_vec_data__)) {
-#ifdef DEBUG
-                    logMessage("WARNING", "DataAlignment ID20 : Failed to retrieved IMU vec SPSC.");
-#endif
+            while (!aligned && gnss_window_buffer_.read_available() > 0) {
+                std::deque<decodeNav::DataFrameID20> gnss_window_packet;
+                if (!gnss_window_buffer_.pop(gnss_window_packet) || gnss_window_packet.empty()) {
+                    // If pop fails or packet is empty, break inner loop to try next IMU packet
                     break;
                 }
 
-                // Skip if IMU data is empty
-                if (temp_gnss_ID20_vec_data__.empty()) {
+                const double min_gnss_time = gnss_window_packet.front().unixTime;
+                const double max_gnss_time = gnss_window_packet.back().unixTime;
+
+                if (min_gnss_time > max_gnss_time) {
 #ifdef DEBUG
-                    logMessage("WARNING", "DataAlignment ID20 : Empty ID20 vec data.");
+                    logMessage("WARNING", "DataAlignment ID20: Invalid IMU timestamp range in packet.");
 #endif
-                    break;
+                    continue; // Get the next IMU packet
                 }
 
-                // find min/max
-                double min_id20_time = temp_gnss_ID20_vec_data__.front().unixTime;
-                double max_id20_time = temp_gnss_ID20_vec_data__.back().unixTime;
+                // --- Core Alignment Logic ---
 
-#ifdef DEBUG
-                    std::ostringstream oss;
-                    oss << std::fixed << std::setprecision(12);
-                    oss << "DataAlignment ID20 : Compass Time. Min: " << min_id20_time << ", Max: " << max_id20_time;
-                    logMessage("LOGGING", oss.str());   
-#endif
-
-                // Verify IMU timestamps are valid and ordered
-                if (min_id20_time > max_id20_time) {
-#ifdef DEBUG
-                    logMessage("WARNING", "DataAlignment ID20 : Invalid ID20 timestamp.");
-#endif
-                    continue;
-                }
-
-                // Check if lidar timestamps are within IMU range
-                if (min_lidar_time >= min_id20_time && max_lidar_time <= max_id20_time) {
-                    // Timestamps are aligned; process the data
+                // Case 1: The IMU packet completely envelops the LiDAR frame. This is the match we want.
+                if (min_lidar_time >= min_gnss_time && max_lidar_time <= max_gnss_time) {
                     aligned = true;
 #ifdef DEBUG
-                    logMessage("LOGGING", "DataAlignment ID20 : Timestamps Lidar and ID20 are aligned.");
+                    logMessage("LOGGING", "DataAlignment ID20: Found alignment envelope.");
 #endif
-
-                    // Filter temp_gnss_ID20_vec_data__ to include only readings within min_lidar_time and max_lidar_time
-                    std::vector<decodeNav::DataFrameID20> filtered_gnss_ID20_vec_data__;
-                    // filtered_gnss_ID20_vec_data__.reserve(temp_gnss_ID20_vec_data__.size()); // Reserve space for efficiency
-                    for (const auto& id20_data : temp_gnss_ID20_vec_data__) {
-                        if (id20_data.unixTime >= min_lidar_time && id20_data.unixTime <= max_lidar_time) {
-                            filtered_gnss_ID20_vec_data__.push_back(id20_data);
-                        }
-                    }
-
-                    // find min/max
-                    double min_filtered_id20_time = filtered_gnss_ID20_vec_data__.front().unixTime;
-                    double max_filtered_id20_time = filtered_gnss_ID20_vec_data__.back().unixTime;
-
-                    if (min_filtered_id20_time >= min_lidar_time && max_filtered_id20_time <= max_lidar_time){
-#ifdef DEBUG
-                            std::ostringstream oss;
-                            oss << std::fixed << std::setprecision(12);
-                            oss << "DataAlignment ID20 : Filtered Compass Time. Min: " << filtered_gnss_ID20_vec_data__.front().unixTime << ", Max: " << filtered_gnss_ID20_vec_data__.back().unixTime << ", Size: " << filtered_gnss_ID20_vec_data__.size();
-                            logMessage("LOGGING", oss.str());
-#endif
-
-                        LidarID20VecDataFrame temp_lidar_ID20_vec_data_;
-                        temp_lidar_ID20_vec_data_.ID20Vec = std::move(filtered_gnss_ID20_vec_data__); // Use filtered data
-                        temp_lidar_ID20_vec_data_.Lidar = temp_lidar_data__;
-
-                        if (!lidar_ID20_buffer_.push(std::move(temp_lidar_ID20_vec_data_))) {
-#ifdef DEBUG
-                            logMessage("WARNING", "DataAlignment ID20 : SPSC Lidar and ID20 Vec buffer push failed.");
-#endif
-                        }
-                    }
+                    std::vector<decodeNav::DataFrameID20> filtered_gnss_window_packet;
                     
-                } else if (min_lidar_time > min_id20_time && max_lidar_time > max_id20_time){
-                    // Lidar is too new or partially overlaps; pop another newer IMU vector >> skip while
-                    continue;
-                } else {
-                    // Lidar impossible to catch up with the IMU timestamp, need to discard this Lidar frame.
-                    // Potential Solution, increase the size buffer frame.
+                    // Use std::copy_if for efficient filtering. It's clearer and often faster.
+                    std::copy_if(gnss_window_packet.begin(), gnss_window_packet.end(), std::back_inserter(filtered_gnss_window_packet),
+                        [&](const decodeNav::DataFrameID20& data) {
+                            return data.unixTime >= min_lidar_time && data.unixTime <= max_lidar_time;
+                        });
+
+                    // CRITICAL: Only proceed if the filtered data is not empty.
+                    if (!filtered_gnss_window_packet.empty()) {
+                        LidarGnssWindowDataFrame combined_data;
+                        combined_data.Lidar = std::move(lidar_frame); // Avoid copy with std::move
+                        combined_data.GnssWindow = std::move(filtered_gnss_window_packet); // Avoid copy with std::move
+
+                        if (!lidar_gnsswindow_buffer_.push(std::move(combined_data))) {
 #ifdef DEBUG
-                    logMessage("ERROR", "DataAlignment ID20 : Lidar cannot catch up with ID20 data, please increase Buffer size.");
+                            logMessage("WARNING", "DataAlignment ID20: Failed to push combined data to buffer.");
 #endif
-                    break;                       
+                        }
+                    } else {
+#ifdef DEBUG
+                        logMessage("WARNING", "DataAlignment ID20: Alignment envelope found, but no IMU points within LiDAR time span.");
+#endif
+                    }
+
+                } 
+                // Case 2: The IMU packet is older than the LiDAR frame. Discard this IMU packet and get the next one.
+                else if (min_lidar_time > min_gnss_time && max_lidar_time > max_gnss_time) {
+                    // This IMU packet is entirely before the LiDAR frame.
+                    // Continue to pop newer IMU packets.
+                    continue;
+                } 
+                // Case 3: The LiDAR frame is too old for this IMU packet. Discard the LiDAR frame.
+                else { 
+                    // This happens if min_lidar_time < min_imu_time.
+                    // Since IMU packets are chronologically ordered, no future IMU packet will ever contain this
+                    // old LiDAR frame. We must discard the current LiDAR frame and get a new one.
+#ifdef DEBUG
+                    logMessage("ERROR", "DataAlignment ID20: LiDAR frame is too old. Discarding LiDAR frame.");
+#endif
+                    break; // Exit inner loop to fetch a new lidar_frame.
                 }
             }
         } catch (const std::exception& e) {
 #ifdef DEBUG
-            logMessage("ERROR", "DataAlignment ID20 : Exception occurred.");
+            logMessage("ERROR", "DataAlignment ID20: Exception occurred: " + std::string(e.what()));
 #endif
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            continue;
         }
     }
 }
@@ -752,16 +705,40 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
     while (running_.load(std::memory_order_acquire)) {
         try {
             
-            LidarID20VecDataFrame temp_lidar_ID20_vec_data_;
-            if (!lidar_ID20_buffer_.pop(temp_lidar_ID20_vec_data_)) {
+            LidarGnssWindowDataFrame temp_combined_data;
+            if (!lidar_gnsswindow_buffer_.pop(temp_combined_data)) {
 #ifdef DEBUG
                 logMessage("WARNING", "runLioStateEstimation : Failed to retrieved LidarID20 SPSC."); 
 #endif
                 continue;
+            } else {
+
+                if(first_frame_){
+                    // --- Handle the very first frame ---
+
+                    decodeNav::DataFrameID20 current_gnss_frame = temp_combined_data.GnssWindow[0];
+                    // Calculate and cache the initial rotation
+                    Eigen::Matrix3d current_R_world_ = navMath::Cb2n(navMath::getQuat(
+                        current_gnss_frame.roll, current_gnss_frame.pitch, current_gnss_frame.yaw
+                    ));
+
+                    // Initialize the global pose state
+                    current_global_pose_ = Eigen::Matrix4d::Identity();
+                    current_global_pose_.block<3, 3>(0, 0) = current_R_world_;
+
+                    odometry_->setInitialPose(current_global_pose_);
+
+                    first_frame_ = false;
+
+                } else {
+
+                }
             }
 
+            
+
             stateestimate::DataFrame currDataFrame;
-            std::vector<lidarDecode::Point3D> temp_lidar_frame = temp_lidar_ID20_vec_data_.Lidar.toPoint3D();
+            std::vector<lidarDecode::Point3D> temp_lidar_frame = temp_combined_data.Lidar.toPoint3D();
             
             // Use tbb::parallel_invoke to run both conversion tasks concurrently
             tbb::parallel_invoke(
@@ -785,22 +762,22 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                 },
                 [&] {
                     // --- Task 2: Sequential IMU Data Conversion (more efficient for small N) ---
-                    const auto& imu_source_vec = temp_lidar_ID20_vec_data_.ID20Vec;
-                    currDataFrame.imu_data_vec.resize(imu_source_vec.size());
+                    const auto& gnss_window_source = temp_combined_data.GnssWindow;
+                    currDataFrame.imu_data_vec.resize(gnss_window_source.size());
                     
                     // A simple sequential loop is faster here due to low iteration count
-                    for (size_t i = 0; i < imu_source_vec.size(); ++i) {
+                    for (size_t i = 0; i < gnss_window_source.size(); ++i) {
                         currDataFrame.imu_data_vec[i].lin_acc = Eigen::Vector3d(
-                            static_cast<double>(imu_source_vec[i].accelX),
-                            static_cast<double>(imu_source_vec[i].accelY),
-                            static_cast<double>(imu_source_vec[i].accelZ)
+                            static_cast<double>(gnss_window_source[i].accelX),
+                            static_cast<double>(gnss_window_source[i].accelY),
+                            static_cast<double>(gnss_window_source[i].accelZ)
                         );
                         currDataFrame.imu_data_vec[i].ang_vel = Eigen::Vector3d(
-                            static_cast<double>(imu_source_vec[i].angularVelocityX),
-                            static_cast<double>(imu_source_vec[i].angularVelocityY),
-                            static_cast<double>(imu_source_vec[i].angularVelocityZ)
+                            static_cast<double>(gnss_window_source[i].angularVelocityX),
+                            static_cast<double>(gnss_window_source[i].angularVelocityY),
+                            static_cast<double>(gnss_window_source[i].angularVelocityZ)
                         );
-                        currDataFrame.imu_data_vec[i].timestamp = imu_source_vec[i].unixTime;
+                        currDataFrame.imu_data_vec[i].timestamp = gnss_window_source[i].unixTime;
                     }
                 }
             ); // End of parallel_invoke
@@ -808,14 +785,13 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
             // ################################# MAIN !!!!
             const auto summary = odometry_->registerFrame(currDataFrame);
 
-
         } catch (const std::exception& e) {
 
         }
     }
 }
 
-// // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores) {
     setThreadAffinity(allowedCores);
@@ -823,7 +799,7 @@ void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores
     while (running_.load(std::memory_order_acquire)) {
         try {
             decodeNav::DataFrameID20 current_frame;
-            if (!ID20_buffer_.pop(current_frame)) {
+            if (!gnss_buffer_.pop(current_frame)) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 continue;
             }

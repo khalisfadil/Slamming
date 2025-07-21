@@ -28,6 +28,7 @@
         "debug_path": "./outputs",
 
         "T_sr": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+
         "qc_diag": [1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6],
         "ad_diag": [1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6],
         "num_extra_states": 0,
@@ -48,11 +49,14 @@
         "max_iterations": 5,
         "sequential_threshold" : 500,
         "num_threads": 4,
-
         "delay_adding_points": 5,
         "use_final_state_value": true,
+        "break_icp_early": true,
+        "use_line_search": true,
 
         "gravity": -9.8042,
+        "use_imu": true,
+        "use_accel": true,
         "r_imu_acc": [1e-6, 1e-6, 1e-6],
         "r_imu_ang": [1e-6, 1e-6, 1e-6],
         "r_pose": [1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6],
@@ -62,27 +66,25 @@
         "p0_bias_gyro": 1e-4,
         "pk_bias_gyro": 1e-4,
         "q_bias_gyro": 1e-6,
-        "use_imu": true,
-        "T_mi_init_only": true,
-        "use_T_mi_gt": false,
-
-        "qg_diag": [1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6],
-        "p0_pose": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
-        "p0_vel": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
-        "p0_accel": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
-        "T_mi_init_cov": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
-        "T_mi_prior_cov": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
-        "xi_ig": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
-        "use_T_mi_prior_after_init": false,
-        "use_bias_prior_after_init": false,
         "acc_loss_func": "CAUCHY",
         "acc_loss_sigma": 1.0,
         "gyro_loss_func": "L2",
         "gyro_loss_sigma": 1.0,
+        
+        "T_mi_init_only": true,
+        "use_T_mi_gt": false,
+        "xi_ig": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
+        "T_mi_init_cov": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
+        "qg_diag": [1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6],
+        "T_mi_prior_cov": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
+        "use_T_mi_prior_after_init": false,
+        "use_bias_prior_after_init": false,
 
-        "filter_lifetimes": false,
-        "break_icp_early": true,
-        "use_line_search": true,
-        "use_accel": true
+        "T_rm_init": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+        "p0_pose": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
+        "p0_vel": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
+        "p0_accel": [1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2],
+
+        "filter_lifetimes": false
     }
   }

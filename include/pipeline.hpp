@@ -39,8 +39,8 @@ class SLAMPipeline {
         lidarDecode::LidarDataFrame Lidar;
     };
 
-    struct LidarID20VecDataFrame {
-        std::vector<decodeNav::DataFrameID20> ID20Vec;
+    struct LidarGnssWindowDataFrame {
+        std::vector<decodeNav::DataFrameID20> GnssWindow;
         lidarDecode::LidarDataFrame Lidar;
     };
 
@@ -55,12 +55,12 @@ class SLAMPipeline {
         boost::lockfree::spsc_queue<std::vector<lidarDecode::LidarIMUDataFrame>, boost::lockfree::capacity<128>> imu_vec_buffer_;
         boost::lockfree::spsc_queue<lidarDecode::LidarIMUDataFrame, boost::lockfree::capacity<128>> imu_buffer_;
 
-        boost::lockfree::spsc_queue<std::vector<decodeNav::DataFrameID20>, boost::lockfree::capacity<128>> ID20_vec_buffer_;
-        boost::lockfree::spsc_queue<decodeNav::DataFrameID20, boost::lockfree::capacity<128>> ID20_buffer_;
-        boost::lockfree::spsc_queue<decodeNav::DataFrameID20, boost::lockfree::capacity<128>> ID20_intern_buffer_;
+        boost::lockfree::spsc_queue<std::deque<decodeNav::DataFrameID20>, boost::lockfree::capacity<128>> gnss_window_buffer_;
+        boost::lockfree::spsc_queue<decodeNav::DataFrameID20, boost::lockfree::capacity<128>> gnss_buffer_;
+        boost::lockfree::spsc_queue<decodeNav::DataFrameID20, boost::lockfree::capacity<128>> gnss_intern_buffer_;
 
         boost::lockfree::spsc_queue<LidarIMUVecDataFrame, boost::lockfree::capacity<128>> lidar_imu_buffer_;
-        boost::lockfree::spsc_queue<LidarID20VecDataFrame, boost::lockfree::capacity<128>> lidar_ID20_buffer_;
+        boost::lockfree::spsc_queue<LidarGnssWindowDataFrame, boost::lockfree::capacity<128>> lidar_gnsswindow_buffer_;
 
         boost::lockfree::spsc_queue<std::string, boost::lockfree::capacity<128>> log_queue_;
 
@@ -91,14 +91,16 @@ class SLAMPipeline {
         
     private:
 
-        // finalState
-        // stateestimate::lidarinertialodom lioOdometry;
+        // runGroundTruthEstimation
         stateestimate::Odometry::Ptr odometry_; 
         const size_t GT_SIZE_COMPASS = 120000;
         bool has_previous_frame_ = false;
         Eigen::Matrix4d current_global_pose_ = Eigen::Matrix4d::Identity();
         decodeNav::DataFrameID20 previous_id20_frame_;
         Eigen::Matrix3d previous_R_world_;
+
+        // runLioStateEstimation
+        bool first_frame_ = true;
 
         // runOusterLidarListener
         lidarDecode::OusterLidarCallback lidarCallback_;
@@ -108,9 +110,9 @@ class SLAMPipeline {
         //runGNSSListener
         decodeNav::GnssCompassCallback gnssCallback_;
         // decodeNav::DataFrameID20 temp_gnss_ID20_data_;
-        std::vector<decodeNav::DataFrameID20> temp_gnss_ID20_vec_data_;
+        std::deque<decodeNav::DataFrameID20> gnss_data_window_;
         double unixTime = 0.0;
-        const size_t VECTOR_SIZE_ID20 = 15;
+        const size_t DATA_SIZE_GNSS = 15;
 
         // runOusterLidarIMUListener
         lidarDecode::LidarIMUDataFrame temp_IMU_data_;
