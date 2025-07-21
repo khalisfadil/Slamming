@@ -726,7 +726,7 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                     current_global_pose_ = Eigen::Matrix4d::Identity();
                     current_global_pose_.block<3, 3>(0, 0) = current_R_world_;
 
-                    // The dynamic_pointer_cast is no longer needed
+                    // The dynamic_pointer_cast is no longer needed polymorphsm
                     odometry_->setInitialPose(current_global_pose_);
 
                     initialized_initial_pose_ = true;
@@ -785,11 +785,11 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                     logMessage("WARNING", "State estimation failed.");
 #endif 
                 }
-
             }
-
         } catch (const std::exception& e) {
+#ifdef DEBUG
             logMessage("ERROR", "Exception in runLioStateEstimation: " + std::string(e.what()));
+#endif 
         }
     }
 }
@@ -852,24 +852,17 @@ void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores
                 previous_id20_frame_ = current_frame;
                 previous_R_world_ = R_curr_world; // Cache the current rotation for the next loop
             }
-
         } catch (const std::exception& e) {
+#ifdef DEBUG
             logMessage("ERROR", "Exception in runGroundTruthEstimation: " + std::string(e.what()));
+#endif 
         }
     }
 }
 
-// // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
-// void SLAMPipeline::runDynamicMapping(const std::vector<int>& allowedCores){
-//     setThreadAffinity(allowedCores);
 
-//     try {
-
-//     } catch (const std::exception& e) {
-
-//     }
-// }
 
 
 
