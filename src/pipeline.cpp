@@ -672,7 +672,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
                     std::ostringstream oss1, oss2;
                     oss1 << std::fixed << std::setprecision(12);
                     oss1 << "dataAlignmentID20: Lidar timestamp start: " << combined_data.Lidar.timestamp << 
-                    ", timestamp start: " << combined_data.Lidar.timestamp_end;
+                    ", timestamp end: " << combined_data.Lidar.timestamp_end;
                     logMessage("LOGGING", oss1.str());
                     oss2 << std::fixed << std::setprecision(12);
                     oss2 <<"dataAlignmentID20: Gnss Window timestamp start: " << combined_data.GnssWindow.front().unixTime <<

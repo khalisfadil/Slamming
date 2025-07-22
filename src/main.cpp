@@ -120,9 +120,9 @@ int main() {
 
         threads.emplace_back([&]() { pipeline.processLogQueue(log_filename,std::vector<int>{3}); });
 
-        // threads.emplace_back([&]() { pipeline.runLioStateEstimation(std::vector<int>{4,5,6,7}); });
+        threads.emplace_back([&]() { pipeline.runLioStateEstimation(std::vector<int>{4,5,6,7}); });
 
-        // threads.emplace_back([&]() { pipeline.runGroundTruthEstimation(std::vector<int>{8}); });
+        threads.emplace_back([&]() { pipeline.runGroundTruthEstimation(std::vector<int>{8}); });
 
         while (SLAMPipeline::running_.load(std::memory_order_acquire)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
