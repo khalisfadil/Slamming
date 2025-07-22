@@ -1,8 +1,8 @@
 #include <pipeline.hpp>
 
 int main() {
-    std::string lidar_json = "/home/khalis/Sync/SensorSOW/Arbeitspakete/MATLAB/Developement/034_Slamming/json/2025047_1054_OS-2-128_122446000745.json";
-    std::string config_json = "/home/khalis/Sync/SensorSOW/Arbeitspakete/MATLAB/Developement/034_Slamming/config/odom_config.json";
+    std::string lidar_json = "./json/2025047_1054_OS-2-128_122446000745.json";
+    std::string config_json = "./config/odom_config.json";
     uint32_t lidar_packet_size = 24896;
 
     // Read and parse JSON file to get udp_profile_lidar and udp_port_lidar
