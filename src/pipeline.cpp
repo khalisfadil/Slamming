@@ -110,6 +110,7 @@ void SLAMPipeline::processLogQueue(const std::string& filename, const std::vecto
     }
     int finalDrops = dropped_logs_.load(std::memory_order_relaxed);
     if (finalDrops > lastReportedDrops) {
+        
         outfile << "[LOGGING] Final report: " << (finalDrops - lastReportedDrops) << " log messages dropped.\n";
     }
 
@@ -389,7 +390,7 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
                 
 #ifdef DEBUG
                     std::ostringstream oss;
-                    oss << "ID28 Listener: Input Value. Latitude: " << new_frame.latitude << ", Longitude: " << temp_gnss_ID20_intern_data_.longitude << ", Altitude: " << temp_gnss_ID20_intern_data_.altitude;
+                    oss << "ID28 Listener: Input Value. Latitude: " << new_frame.latitude << ", Longitude: " << new_frame.longitude << ", Altitude: " << new_frame.altitude;
                     logMessage("LOGGING", oss.str());
 #endif
                 // **OPTIMIZATION 1: Use pop_front() on the deque.**
