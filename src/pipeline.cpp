@@ -141,6 +141,7 @@ void SLAMPipeline::runOusterLidarListenerSingleReturn(boost::asio::io_context& i
 
         UdpSocket listener(ioContext, host, port, [&](const std::vector<uint8_t>& packet_data) {
 
+            lidarDecode::LidarDataFrame temp_lidar_data_;
             lidarCallback_.decode_packet_single_return(packet_data, temp_lidar_data_);
            
             if (temp_lidar_data_.numberpoints > 0 && temp_lidar_data_.frame_id != this->frame_id_) {
@@ -207,7 +208,7 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
     if (host.empty() || port == 0) {
 #ifdef DEBUG
         std::ostringstream oss;
-        oss << "Lidar Listener: Invalid host or port. Host: " << host << ", Port: " << port;
+        oss << "runOusterLidarListenerLegacy: Invalid host or port. Host: " << host << ", Port: " << port;
         logMessage("ERROR", oss.str());
 #endif 
         return;
@@ -215,7 +216,8 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
 
     try {
         UdpSocket listener(ioContext, host, port, [&](const std::vector<uint8_t>& packet_data) {
-           
+
+            lidarDecode::LidarDataFrame temp_lidar_data_;
             lidarCallback_.decode_packet_legacy(packet_data, temp_lidar_data_);
 
             if (temp_lidar_data_.numberpoints > 0 && temp_lidar_data_.frame_id != this->frame_id_) {
@@ -223,7 +225,7 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
                 
                 if (!lidar_buffer_.push(std::move(temp_lidar_data_))) {
 #ifdef DEBUG
-                    logMessage("WARNING", "Lidar Listener: SPSC Lidar buffer push failed.");
+                    logMessage("WARNING", "runOusterLidarListenerLegacy: SPSC LidarDataFrame push failed.");
 #endif
                 }
             }
@@ -240,13 +242,13 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
                 break; 
             } catch (const std::exception& e) {
 #ifdef DEBUG
-                logMessage("ERROR", "Lidar Listener: Exception in ioContext.");
+                logMessage("ERROR", "runOusterLidarListenerLegacy: Exception in ioContext.");
 #endif
 
                 if (running_.load(std::memory_order_acquire)) {
                     ioContext.restart(); // Restart Asio io_context to attempt recovery.
 #ifdef DEBUG
-                    logMessage("LOGGING", "Lidar Listener: ioContext restarted.");
+                    logMessage("LOGGING", "runOusterLidarListenerLegacy: ioContext restarted.");
 #endif
 
                 } else {
@@ -256,7 +258,7 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
         }
     } catch(const std::exception& e){
 #ifdef DEBUG
-        logMessage("ERROR", "Lidar Listener: Setup exception.");
+        logMessage("ERROR", "runOusterLidarListenerLegacy: Setup exception.");
 #endif
     }
 
@@ -265,7 +267,7 @@ void SLAMPipeline::runOusterLidarListenerLegacy(boost::asio::io_context& ioConte
         ioContext.stop();
     }
 #ifdef DEBUG
-    logMessage("LOGGING", "Lidar Listener: listener stopped."); 
+    logMessage("LOGGING", "runOusterLidarListenerLegacy: listener stopped."); 
 #endif
 }
 
@@ -376,7 +378,7 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
     if (host.empty() || port == 0) {
 #ifdef DEBUG
         std::ostringstream oss;
-        oss << "ID28 Listener: Invalid host or port. Host: " << host << ", Port: " << port;
+        oss << "runGNSSID20Listener: Invalid host or port. Host: " << host << ", Port: " << port;
         logMessage("ERROR", oss.str());
 #endif
         return;
@@ -390,7 +392,7 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
                 
 #ifdef DEBUG
                     std::ostringstream oss;
-                    oss << "ID28 Listener: Input Value. Latitude: " << new_frame.latitude << ", Longitude: " << new_frame.longitude << ", Altitude: " << new_frame.altitude;
+                    oss << "runGNSSID20Listener: Input Value. Latitude: " << new_frame.latitude << ", Longitude: " << new_frame.longitude << ", Altitude: " << new_frame.altitude;
                     logMessage("LOGGING", oss.str());
 #endif
                 // **OPTIMIZATION 1: Use pop_front() on the deque.**
@@ -403,12 +405,12 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
                 if (gnss_data_window_.size() == DATA_SIZE_GNSS) {
                     if (!gnss_window_buffer_.push(gnss_data_window_)) {
 #ifdef DEBUG
-                        logMessage("WARNING", "ID20 Listener: SPSC ID20 Vec buffer push failed.");
+                        logMessage("WARNING", "runGNSSID20Listener: SPSC ID20 Vec buffer push failed.");
 #endif
                     }
                     if (!gnss_buffer_.push(new_frame)) {
 #ifdef DEBUG
-                    logMessage("WARNING", "ID20 Listener: SPSC ID20 buffer push failed.");
+                    logMessage("WARNING", "runGNSSID20Listener: SPSC ID20 buffer push failed.");
 #endif
                     }
                 }
@@ -424,7 +426,7 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
 
             if (!gnss_intern_buffer_.push(new_frame)) {
 #ifdef DEBUG
-                logMessage("WARNING", "ID20 Listener: SPSC ID20 intern buffer push failed.");
+                logMessage("WARNING", "runGNSSID20Listener: SPSC ID20 intern buffer push failed.");
 #endif
             }
         }, bufferSize);
@@ -437,23 +439,23 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
                 ioContext.run();
             } catch (const std::exception& e) {
 #ifdef DEBUG
-                logMessage("ERROR", "ID20 Listener: Exception in I/O thread.");
+                logMessage("ERROR", "runGNSSID20Listener: Exception in I/O thread.");
 #endif
             }
 #ifdef DEBUG
-            logMessage("LOGGING", "ID20 Listener: I/O thread finished.");
+            logMessage("LOGGING", "runGNSSID20Listener: I/O thread finished.");
 #endif
         });
 
 #ifdef DEBUG
-        logMessage("LOGGING", "ID20 Listener: Consumer loop started.");
+        logMessage("LOGGING", "runGNSSID20Listener: Consumer loop started.");
 #endif
         while (running_.load(std::memory_order_acquire)) {
             processGNSSID20Frames();
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 #ifdef DEBUG
-        logMessage("LOGGING", "ID20 Listener: Stopping I/O context.");
+        logMessage("LOGGING", "runGNSSID20Listener: Stopping I/O context.");
 #endif
         if (!ioContext.stopped()) {
             ioContext.stop();
@@ -465,14 +467,14 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
     }
     catch(const std::exception& e){
 #ifdef DEBUG
-        logMessage("ERROR", "ID20 Listener: Setup exception.");
+        logMessage("ERROR", "runGNSSID20Listener: Setup exception.");
 #endif
         if (!ioContext.stopped()) {
             ioContext.stop();
         }
     }
 #ifdef DEBUG
-    logMessage("LOGGING", "ID20 Listener: Listener stopped.");
+    logMessage("LOGGING", "runGNSSID20Listener Listener stopped.");
 #endif
 }
 
@@ -602,8 +604,11 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
             // 1. Pop a LiDAR frame from the buffer
             lidarDecode::LidarDataFrame lidar_frame;
             if (!lidar_buffer_.pop(lidar_frame) || lidar_frame.timestamp_points.empty()) {
+#ifdef DEBUG
+                logMessage("WARNING", "dataAlignmentID20 : Failed to retrieved LidarDataFrame SPSC."); 
+#endif
                 // If pop fails or the frame is empty, wait and try again
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 continue;
             }
 
@@ -614,7 +619,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
 
             if (min_lidar_time > max_lidar_time) {
 #ifdef DEBUG
-                logMessage("ERROR", "DataAlignment ID20: Invalid lidar timestamp range.");
+                logMessage("ERROR", "dataAlignmentID20: Invalid lidar timestamp range.");
 #endif
                 continue;
             }
@@ -625,6 +630,9 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
                 std::deque<decodeNav::DataFrameID20> gnss_window_packet;
                 if (!gnss_window_buffer_.pop(gnss_window_packet) || gnss_window_packet.empty()) {
                     // If pop fails or packet is empty, break inner loop to try next IMU packet
+#ifdef DEBUG
+                logMessage("WARNING", "dataAlignmentID20 : Failed to retrieved DataFrameID20 SPSC."); 
+#endif
                     break;
                 }
 
@@ -633,7 +641,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
 
                 if (min_gnss_time > max_gnss_time) {
 #ifdef DEBUG
-                    logMessage("WARNING", "DataAlignment ID20: Invalid IMU timestamp range in packet.");
+                    logMessage("WARNING", "dataAlignmentID20: Invalid IMU timestamp range in packet.");
 #endif
                     continue; // Get the next IMU packet
                 }
@@ -644,7 +652,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
                 if (min_lidar_time >= min_gnss_time && max_lidar_time <= max_gnss_time) {
                     aligned = true;
 #ifdef DEBUG
-                    logMessage("LOGGING", "DataAlignment ID20: Found alignment envelope.");
+                    logMessage("LOGGING", "dataAlignmentID20: Found alignment envelope.");
 #endif
                     std::vector<decodeNav::DataFrameID20> filtered_gnss_window_packet;
                     
@@ -659,6 +667,16 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
                         LidarGnssWindowDataFrame combined_data;
                         combined_data.Lidar = std::move(lidar_frame); // Avoid copy with std::move
                         combined_data.GnssWindow = std::move(filtered_gnss_window_packet); // Avoid copy with std::move
+
+#ifdef DEBUG
+                    std::ostringstream oss;
+                    oss << std::fixed << std::setprecision(12);
+                    oss << "dataAlignmentID20: Lidar timestamp start: " << combined_data.Lidar.timestamp << 
+                    ", timestamp start: " << combined_data.Lidar.timestamp_end << 
+                    ", Gnss Window timestamp start: " << combined_data.GnssWindow.front().unixTime <<
+                    ", timestamp end: " << combined_data.GnssWindow.back().unixTime;
+                    logMessage("LOGGING", oss.str());
+#endif
 
                         if (!lidar_gnsswindow_buffer_.push(std::move(combined_data))) {
 #ifdef DEBUG
@@ -684,14 +702,14 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
                     // Since IMU packets are chronologically ordered, no future IMU packet will ever contain this
                     // old LiDAR frame. We must discard the current LiDAR frame and get a new one.
 #ifdef DEBUG
-                    logMessage("ERROR", "DataAlignment ID20: LiDAR frame is too old. Discarding LiDAR frame.");
+                    logMessage("ERROR", "dataAlignmentID20: LiDAR frame is too old. Discarding LiDAR frame.");
 #endif
                     break; // Exit inner loop to fetch a new lidar_frame.
                 }
             }
         } catch (const std::exception& e) {
 #ifdef DEBUG
-            logMessage("ERROR", "DataAlignment ID20: Exception occurred: " + std::string(e.what()));
+            logMessage("ERROR", "dataAlignmentID20: Exception occurred: " + std::string(e.what()));
 #endif
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
@@ -711,14 +729,14 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
 #ifdef DEBUG
                 logMessage("WARNING", "runLioStateEstimation : Failed to retrieved LidarGnssWindowDataFrame SPSC."); 
 #endif
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 continue;
             } else {
 
                 if(!initialized_initial_pose_){
                     // --- Handle the very first frame ---
 
-                    decodeNav::DataFrameID20 current_gnss_frame = temp_combined_data.GnssWindow[0];
+                    decodeNav::DataFrameID20 current_gnss_frame = temp_combined_data.GnssWindow.back();
                     // Calculate and cache the initial rotation
                     Eigen::Matrix3d current_R_world_ = navMath::Cb2n(navMath::getQuat(
                         current_gnss_frame.roll, current_gnss_frame.pitch, current_gnss_frame.yaw

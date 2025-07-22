@@ -104,7 +104,6 @@ class SLAMPipeline {
 
         // runOusterLidarListener
         lidarDecode::OusterLidarCallback lidarCallback_;
-        lidarDecode::LidarDataFrame temp_lidar_data_;
         uint16_t frame_id_= 0;
 
         //runGNSSListener
