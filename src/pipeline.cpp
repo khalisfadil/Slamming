@@ -631,7 +631,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
                 if (!gnss_window_buffer_.pop(gnss_window_packet) || gnss_window_packet.empty()) {
                     // If pop fails or packet is empty, break inner loop to try next IMU packet
 #ifdef DEBUG
-                logMessage("WARNING", "dataAlignmentID20 : Failed to retrieved DataFrameID20 SPSC."); 
+                // logMessage("WARNING", "dataAlignmentID20 : Failed to retrieved DataFrameID20 SPSC."); 
 #endif
                     break;
                 }
@@ -669,13 +669,15 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
                         combined_data.GnssWindow = std::move(filtered_gnss_window_packet); // Avoid copy with std::move
 
 #ifdef DEBUG
-                    std::ostringstream oss;
-                    oss << std::fixed << std::setprecision(12);
-                    oss << "dataAlignmentID20: Lidar timestamp start: " << combined_data.Lidar.timestamp << 
-                    ", timestamp start: " << combined_data.Lidar.timestamp_end << 
-                    ", Gnss Window timestamp start: " << combined_data.GnssWindow.front().unixTime <<
+                    std::ostringstream oss1, oss2;
+                    oss1 << std::fixed << std::setprecision(12);
+                    oss1 << "dataAlignmentID20: Lidar timestamp start: " << combined_data.Lidar.timestamp << 
+                    ", timestamp start: " << combined_data.Lidar.timestamp_end;
+                    logMessage("LOGGING", oss1.str());
+                    oss2 << std::fixed << std::setprecision(12);
+                    oss2 <<"dataAlignmentID20: Gnss Window timestamp start: " << combined_data.GnssWindow.front().unixTime <<
                     ", timestamp end: " << combined_data.GnssWindow.back().unixTime;
-                    logMessage("LOGGING", oss.str());
+                    logMessage("LOGGING", oss2.str());
 #endif
 
                         if (!lidar_gnsswindow_buffer_.push(std::move(combined_data))) {
@@ -727,7 +729,7 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
             LidarGnssWindowDataFrame temp_combined_data;
             if (!lidar_gnsswindow_buffer_.pop(temp_combined_data)) {
 #ifdef DEBUG
-                logMessage("WARNING", "runLioStateEstimation : Failed to retrieved LidarGnssWindowDataFrame SPSC."); 
+                // logMessage("WARNING", "runLioStateEstimation : Failed to retrieved LidarGnssWindowDataFrame SPSC."); 
 #endif
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 continue;
