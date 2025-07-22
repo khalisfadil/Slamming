@@ -110,7 +110,7 @@ void SLAMPipeline::processLogQueue(const std::string& filename, const std::vecto
     }
     int finalDrops = dropped_logs_.load(std::memory_order_relaxed);
     if (finalDrops > lastReportedDrops) {
-        
+
         outfile << "[LOGGING] Final report: " << (finalDrops - lastReportedDrops) << " log messages dropped.\n";
     }
 
@@ -709,8 +709,9 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
             LidarGnssWindowDataFrame temp_combined_data;
             if (!lidar_gnsswindow_buffer_.pop(temp_combined_data)) {
 #ifdef DEBUG
-                logMessage("WARNING", "runLioStateEstimation : Failed to retrieved LidarID20 SPSC."); 
+                logMessage("WARNING", "runLioStateEstimation : Failed to retrieved LidarGnssWindowDataFrame SPSC."); 
 #endif
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             } else {
 
