@@ -25,7 +25,7 @@
         "num_threads_odom": 4,
 
         "debug_print": false,
-        "debug_path": "./outputs",
+        "debug_path": "../report/traj/",
 
         "T_sr": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
 
