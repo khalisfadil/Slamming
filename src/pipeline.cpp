@@ -605,7 +605,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
             lidarDecode::LidarDataFrame lidar_frame;
             if (!lidar_buffer_.pop(lidar_frame) || lidar_frame.timestamp_points.empty()) {
 #ifdef DEBUG
-                logMessage("WARNING", "dataAlignmentID20 : Failed to retrieved LidarDataFrame SPSC."); 
+                // logMessage("WARNING", "dataAlignmentID20: Failed to retrieved LidarDataFrame SPSC."); 
 #endif
                 // If pop fails or the frame is empty, wait and try again
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
