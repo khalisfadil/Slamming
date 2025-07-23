@@ -755,9 +755,9 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                     finalicp::traj::Time Time(current_gnss_frame.unixTime);
 
                     std::ostringstream oss;
-                    oss << "Origin: " << Time.nanosecs() << " " 
+                    oss << "runLioStateEstimation (ORIGIN): " << Time.nanosecs() << " " 
                     << current_gnss_frame.latitude << " " << current_gnss_frame.longitude << " " << current_gnss_frame.altitude 
-                    << current_gnss_frame.roll << " " << current_gnss_frame.pitch << " " << current_gnss_frame.yaw << "\n"; 
+                    << current_gnss_frame.roll << " " << current_gnss_frame.pitch << " " << current_gnss_frame.yaw; 
                     logMessage("LOGGING", oss.str());
                 }
 
