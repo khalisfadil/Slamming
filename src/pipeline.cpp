@@ -868,7 +868,7 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
 
                 outfile << Time.nanosecs() << " " 
                 << currFrame.latitude << " " << currFrame.longitude << " " << currFrame.altitude
-                 << currFrame.roll << " " << currFrame.pitch << " " << currFrame.yaw;  "\n"; 
+                << currFrame.roll << " " << currFrame.pitch << " " << currFrame.yaw;  "\n"; 
                 
                 outfile << Time.nanosecs() << " " 
                 << T_mr_(0, 0) << " " << T_mr_(0, 1) << " " << T_mr_(0, 2) << " " << T_mr_(0, 3) << " "
