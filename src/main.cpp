@@ -17,13 +17,10 @@ int main() {
     // Generate UTC timestamp for filename
     auto now = std::chrono::system_clock::now();
     auto utc_time = std::chrono::system_clock::to_time_t(now);
-    std::stringstream s1;
-    s1 << std::put_time(std::gmtime(&utc_time), "%Y%m%d_%H%M%S");
-    std::string timestamp = s1.str();
+    std::stringstream ss;
+    ss << std::put_time(std::gmtime(&utc_time), "%Y%m%d_%H%M%S");
+    std::string timestamp = ss.str();
     std::string log_filename = "../report/log/log_report_" + timestamp + ".txt";
-    std::stringstream s2;
-    s2 << std::put_time(std::gmtime(&utc_time), "%Y%m%d_%H%M%S");
-    std::string timestamp = s2.str();
     std::string gt_filename = "../report/gt/gt_report_" + timestamp + ".txt";
 
     try {
