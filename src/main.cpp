@@ -13,6 +13,19 @@ int main() {
     uint16_t udp_port_imu;
     uint16_t udp_port_gnss = 6597;
     uint32_t id20_packet_size = 105;
+
+    // Generate UTC timestamp for filename
+    auto now = std::chrono::system_clock::now();
+    auto utc_time = std::chrono::system_clock::to_time_t(now);
+    std::stringstream s1;
+    s1 << std::put_time(std::gmtime(&utc_time), "%Y%m%d_%H%M%S");
+    std::string timestamp = s1.str();
+    std::string log_filename = "../report/log/log_report_" + timestamp + ".txt";
+    std::stringstream s2;
+    s2 << std::put_time(std::gmtime(&utc_time), "%Y%m%d_%H%M%S");
+    std::string timestamp = s2.str();
+    std::string gt_filename = "../report/gt/gt_report_" + timestamp + ".txt";
+
     try {
         std::ifstream json_file(lidar_json);
         if (!json_file.is_open()) {
@@ -110,19 +123,11 @@ int main() {
 
         threads.emplace_back([&]() { pipeline.dataAlignmentID20(std::vector<int>{2}); });
 
-        // Generate UTC timestamp for filename
-        auto now = std::chrono::system_clock::now();
-        auto utc_time = std::chrono::system_clock::to_time_t(now);
-        std::stringstream ss;
-        ss << std::put_time(std::gmtime(&utc_time), "%Y%m%d_%H%M%S");
-        std::string timestamp = ss.str();
-        std::string log_filename = "../report/log/log_report_" + timestamp + ".txt";
-
         threads.emplace_back([&]() { pipeline.processLogQueue(log_filename,std::vector<int>{3}); });
 
         threads.emplace_back([&]() { pipeline.runLioStateEstimation(std::vector<int>{4,5,6,7}); });
 
-        threads.emplace_back([&]() { pipeline.runGroundTruthEstimation(std::vector<int>{8}); });
+        threads.emplace_back([&]() { pipeline.runGroundTruthEstimation(gt_filename, std::vector<int>{8}); });
 
         while (SLAMPipeline::running_.load(std::memory_order_acquire)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));

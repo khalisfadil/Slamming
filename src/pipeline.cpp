@@ -722,7 +722,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
 
 void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
     setThreadAffinity(allowedCores);
-    tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads_);
+    // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads_);
     while (running_.load(std::memory_order_acquire)) {
         try {
             
@@ -752,7 +752,14 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                     odometry_->setInitialPose(current_global_pose_);
 
                     initialized_initial_pose_ = true;
-                } 
+                    finalicp::traj::Time Time(current_gnss_frame.unixTime);
+
+                    std::ostringstream oss;
+                    oss << "Origin: " << Time.nanosecs() << " " 
+                    << current_gnss_frame.latitude << " " << current_gnss_frame.longitude << " " << current_gnss_frame.altitude 
+                    << current_gnss_frame.roll << " " << current_gnss_frame.pitch << " " << current_gnss_frame.yaw << "\n"; 
+                    logMessage("LOGGING", oss.str());
+                }
 
                 stateestimate::DataFrame currDataFrame;
                 std::vector<lidarDecode::Point3D> temp_lidar_frame = temp_combined_data.Lidar.toPoint3D();
@@ -800,13 +807,13 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                 ); // End of parallel_invoke
 
                 // ################################# MAIN !!!!
-                const auto summary = odometry_->registerFrame(currDataFrame);
+                // const auto summary = odometry_->registerFrame(currDataFrame);
 
-                if (!summary.success){
-#ifdef DEBUG
-                    logMessage("WARNING", "State estimation failed.");
-#endif 
-                }
+//                 if (!summary.success){
+// #ifdef DEBUG
+//                     logMessage("WARNING", "State estimation failed.");
+// #endif 
+//                 }
             }
         } catch (const std::exception& e) {
 #ifdef DEBUG
@@ -818,8 +825,19 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
 
 // -----------------------------------------------------------------------------
 
-void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores) {
+void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const std::vector<int>& allowedCores) {
     setThreadAffinity(allowedCores);
+
+    std::ofstream outfile(filename);
+    if (!outfile.is_open()) {
+        auto now = std::chrono::system_clock::now();
+        auto now_time_t = std::chrono::system_clock::to_time_t(now);
+        std::ostringstream oss;
+        oss << "[" << std::put_time(std::gmtime(&now_time_t), "%Y-%m-%dT%H:%M:%SZ") << "] "
+            << "[ERROR] failed to open file " << filename << " for writing.\n";
+        std::cerr << oss.str(); // Fallback to cerr if file cannot be opened
+        return;
+    }
 
     while (running_.load(std::memory_order_acquire)) {
         try {
@@ -839,13 +857,23 @@ void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores
                 // Initialize the global pose state
                 current_global_pose_ = Eigen::Matrix4d::Identity();
                 current_global_pose_.block<3, 3>(0, 0) = previous_R_world_;
-
                 odometry_->T_i_r_gt_poses.push_back(current_global_pose_);
 
                 // Set trackers for the next iteration
                 previous_id20_frame_ = current_frame;
                 has_previous_frame_ = true;
 
+                finalicp::traj::Time Time(current_frame.unixTime);
+
+                outfile << Time.nanosecs() << " " 
+                << current_frame.latitude << " " << current_frame.longitude << " " << current_frame.altitude << "\n"; 
+                
+                outfile << Time.nanosecs() << " " 
+                << current_global_pose_(0, 0) << " " << current_global_pose_(0, 1) << " " << current_global_pose_(0, 2) << " " << current_global_pose_(0, 3) << " "
+                << current_global_pose_(1, 0) << " " << current_global_pose_(1, 1) << " " << current_global_pose_(1, 2) << " " << current_global_pose_(1, 3) << " "
+                << current_global_pose_(2, 0) << " " << current_global_pose_(2, 1) << " " << current_global_pose_(2, 2) << " " << current_global_pose_(2, 3) << " "
+                << current_global_pose_(3, 0) << " " << current_global_pose_(3, 1) << " " << current_global_pose_(3, 2) << " " << current_global_pose_(3, 3) << "\n";
+                
             } else {
                 // --- Handle all subsequent frames ---
                 // OPTIMIZATION 1: Avoid re-calculating the previous rotation matrix
@@ -867,12 +895,21 @@ void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores
                 // New pose components: t_new = R_old * t_rel + t_old
                 current_global_pose_.block<3, 3>(0, 0) = R_global_old * R_relative;
                 current_global_pose_.block<3, 1>(0, 3) = R_global_old * relative_position + t_global_old;
-                
                 odometry_->T_i_r_gt_poses.push_back(current_global_pose_);
 
                 // Update trackers for the next iteration
                 previous_id20_frame_ = current_frame;
                 previous_R_world_ = R_curr_world; // Cache the current rotation for the next loop
+
+                std::ostringstream oss;
+                finalicp::traj::Time Time(current_frame.unixTime);
+
+                outfile << Time.nanosecs() << " " 
+                << current_global_pose_(0, 0) << " " << current_global_pose_(0, 1) << " " << current_global_pose_(0, 2) << " " << current_global_pose_(0, 3) << " "
+                << current_global_pose_(1, 0) << " " << current_global_pose_(1, 1) << " " << current_global_pose_(1, 2) << " " << current_global_pose_(1, 3) << " "
+                << current_global_pose_(2, 0) << " " << current_global_pose_(2, 1) << " " << current_global_pose_(2, 2) << " " << current_global_pose_(2, 3) << " "
+                << current_global_pose_(3, 0) << " " << current_global_pose_(3, 1) << " " << current_global_pose_(3, 2) << " " << current_global_pose_(3, 3) << "\n";
+
             }
         } catch (const std::exception& e) {
 #ifdef DEBUG
@@ -880,6 +917,8 @@ void SLAMPipeline::runGroundTruthEstimation(const std::vector<int>& allowedCores
 #endif 
         }
     }
+    outfile.flush(); // Ensure data is written
+    outfile.close();
 }
 
 // -----------------------------------------------------------------------------
