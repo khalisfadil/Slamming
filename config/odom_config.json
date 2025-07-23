@@ -3,10 +3,10 @@
     "odometry_options": {
 
         "init_num_frames": 10,
-        "init_voxel_size": 0.2,
-        "voxel_size": 0.2,
-        "init_sample_voxel_size": 0.2,
-        "sample_voxel_size": 0.2,
+        "init_voxel_size": 0.1,
+        "voxel_size": 0.1,
+        "init_sample_voxel_size": 0.1,
+        "sample_voxel_size": 0.1,
 
         "size_voxel_map": 0.5,
         "min_distance_points": 0.1,
@@ -21,8 +21,8 @@
         "threshold_translation_norm": 0.001,
         "min_number_keypoints": 100,
 
-        "sequential_threshold_odom": 500,
-        "num_threads_odom": 4,
+        "sequential_threshold_odom": 1000,
+        "num_threads_odom": 2,
 
         "debug_print": false,
         "debug_path": "../report/traj/",
@@ -47,8 +47,8 @@
         
         "verbose": false,
         "max_iterations": 5,
-        "sequential_threshold" : 500,
-        "num_threads": 4,
+        "sequential_threshold" : 1000,
+        "num_threads": 2,
         "delay_adding_points": 5,
         "use_final_state_value": true,
         "break_icp_early": true,

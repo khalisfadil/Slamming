@@ -391,9 +391,9 @@ void SLAMPipeline::runGNSSID20Listener(boost::asio::io_context& ioContext,
                 this->unixTime = new_frame.unixTime;
                 
 #ifdef DEBUG
-                    std::ostringstream oss;
-                    oss << "runGNSSID20Listener: Input Value. Latitude: " << new_frame.latitude << ", Longitude: " << new_frame.longitude << ", Altitude: " << new_frame.altitude;
-                    logMessage("LOGGING", oss.str());
+                    // std::ostringstream oss;
+                    // oss << "runGNSSID20Listener: Input Value. Latitude: " << new_frame.latitude << ", Longitude: " << new_frame.longitude << ", Altitude: " << new_frame.altitude;
+                    // logMessage("LOGGING", oss.str());
 #endif
                 // **OPTIMIZATION 1: Use pop_front() on the deque.**
                 // When full, remove the oldest element (O(1) operation).
@@ -608,7 +608,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
                 // logMessage("WARNING", "dataAlignmentID20: Failed to retrieved LidarDataFrame SPSC."); 
 #endif
                 // If pop fails or the frame is empty, wait and try again
-                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             }
 
@@ -652,7 +652,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
                 if (min_lidar_time >= min_gnss_time && max_lidar_time <= max_gnss_time) {
                     aligned = true;
 #ifdef DEBUG
-                    logMessage("LOGGING", "dataAlignmentID20: Found alignment envelope.");
+                    // logMessage("LOGGING", "dataAlignmentID20: Found alignment envelope.");
 #endif
                     std::vector<decodeNav::DataFrameID20> filtered_gnss_window_packet;
                     
@@ -726,82 +726,82 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
     while (running_.load(std::memory_order_acquire)) {
         try {
             
-            LidarGnssWindowDataFrame temp_combined_data;
-            if (!lidar_gnsswindow_buffer_.pop(temp_combined_data)) {
+            LidarGnssWindowDataFrame tempCombineddata;
+            if (!lidar_gnsswindow_buffer_.pop(tempCombineddata)) {
 #ifdef DEBUG
                 // logMessage("WARNING", "runLioStateEstimation : Failed to retrieved LidarGnssWindowDataFrame SPSC."); 
 #endif
-                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             } else {
 
-                if(!initialized_initial_pose_){
+                if(!init_){
                     // --- Handle the very first frame ---
-
-                    decodeNav::DataFrameID20 current_gnss_frame = temp_combined_data.GnssWindow.back();
+                    Eigen::Matrix4d T_mr;
+                    decodeNav::DataFrameID20 currFrame = tempCombineddata.GnssWindow.back();
                     // Calculate and cache the initial rotation
-                    Eigen::Matrix3d current_R_world_ = navMath::Cb2n(navMath::getQuat(
-                        current_gnss_frame.roll, current_gnss_frame.pitch, current_gnss_frame.yaw
+                    Eigen::Matrix3d R_mr = navMath::Cb2n(navMath::getQuat(
+                        currFrame.roll, currFrame.pitch, currFrame.yaw
                     ));
 
                     // Initialize the global pose state
-                    current_global_pose_ = Eigen::Matrix4d::Identity();
-                    current_global_pose_.block<3, 3>(0, 0) = current_R_world_;
+                    T_mr = Eigen::Matrix4d::Identity();
+                    T_mr.block<3, 3>(0, 0) = R_mr;
 
                     // The dynamic_pointer_cast is no longer needed polymorphsm
-                    odometry_->setInitialPose(current_global_pose_);
+                    odometry_->initTmr(T_mr);
 
-                    initialized_initial_pose_ = true;
-                    finalicp::traj::Time Time(current_gnss_frame.unixTime);
+                    init_ = true;
+                    finalicp::traj::Time Time(currFrame.unixTime);
 
                     std::ostringstream oss;
                     oss << "runLioStateEstimation (ORIGIN): " << Time.nanosecs() << " " 
-                    << current_gnss_frame.latitude << " " << current_gnss_frame.longitude << " " << current_gnss_frame.altitude 
-                    << current_gnss_frame.roll << " " << current_gnss_frame.pitch << " " << current_gnss_frame.yaw; 
+                    << currFrame.latitude << " " << currFrame.longitude << " " << currFrame.altitude 
+                    << currFrame.roll << " " << currFrame.pitch << " " << currFrame.yaw; 
                     logMessage("LOGGING", oss.str());
                 }
 
                 stateestimate::DataFrame currDataFrame;
-                std::vector<lidarDecode::Point3D> temp_lidar_frame = temp_combined_data.Lidar.toPoint3D();
+                std::vector<lidarDecode::Point3D> tempLidarframe = tempCombineddata.Lidar.toPoint3D();
                 
                 // Use tbb::parallel_invoke to run both conversion tasks concurrently
                 tbb::parallel_invoke(
                     [&] {
                         // --- Task 1: Parallel LiDAR Point Cloud Conversion (still beneficial) ---
-                        currDataFrame.pointcloud.resize(temp_lidar_frame.size());
+                        currDataFrame.pointcloud.resize(tempLidarframe.size());
                         
-                        tbb::parallel_for(tbb::blocked_range<size_t>(0, temp_lidar_frame.size()),
+                        tbb::parallel_for(tbb::blocked_range<size_t>(0, tempLidarframe.size()),
                             [&](const tbb::blocked_range<size_t>& r) {
                                 for (size_t i = r.begin(); i != r.end(); ++i) {
                                     // ... (point cloud data assignment) ...
-                                    currDataFrame.pointcloud[i].raw_pt = temp_lidar_frame[i].raw_pt;
-                                    currDataFrame.pointcloud[i].pt = temp_lidar_frame[i].pt;
-                                    currDataFrame.pointcloud[i].radial_velocity = temp_lidar_frame[i].radial_velocity;
-                                    currDataFrame.pointcloud[i].alpha_timestamp = temp_lidar_frame[i].alpha_timestamp;
-                                    currDataFrame.pointcloud[i].timestamp = temp_lidar_frame[i].timestamp;
-                                    currDataFrame.pointcloud[i].beam_id = temp_lidar_frame[i].beam_id;
+                                    currDataFrame.pointcloud[i].raw_pt = tempLidarframe[i].raw_pt;
+                                    currDataFrame.pointcloud[i].pt = tempLidarframe[i].pt;
+                                    currDataFrame.pointcloud[i].radial_velocity = tempLidarframe[i].radial_velocity;
+                                    currDataFrame.pointcloud[i].alpha_timestamp = tempLidarframe[i].alpha_timestamp;
+                                    currDataFrame.pointcloud[i].timestamp = tempLidarframe[i].timestamp;
+                                    currDataFrame.pointcloud[i].beam_id = tempLidarframe[i].beam_id;
                                 }
                             }
                         );
                     },
                     [&] {
                         // --- Task 2: Sequential IMU Data Conversion (more efficient for small N) ---
-                        const auto& gnss_window_source = temp_combined_data.GnssWindow;
-                        currDataFrame.imu_data_vec.resize(gnss_window_source.size());
+                        const auto& gnssWindowsource = tempCombineddata.GnssWindow;
+                        currDataFrame.imu_data_vec.resize(gnssWindowsource.size());
                         
                         // A simple sequential loop is faster here due to low iteration count
-                        for (size_t i = 0; i < gnss_window_source.size(); ++i) {
+                        for (size_t i = 0; i < gnssWindowsource.size(); ++i) {
                             currDataFrame.imu_data_vec[i].lin_acc = Eigen::Vector3d(
-                                static_cast<double>(gnss_window_source[i].accelX),
-                                static_cast<double>(gnss_window_source[i].accelY),
-                                static_cast<double>(gnss_window_source[i].accelZ)
+                                static_cast<double>(gnssWindowsource[i].accelX),
+                                static_cast<double>(gnssWindowsource[i].accelY),
+                                static_cast<double>(gnssWindowsource[i].accelZ)
                             );
                             currDataFrame.imu_data_vec[i].ang_vel = Eigen::Vector3d(
-                                static_cast<double>(gnss_window_source[i].angularVelocityX),
-                                static_cast<double>(gnss_window_source[i].angularVelocityY),
-                                static_cast<double>(gnss_window_source[i].angularVelocityZ)
+                                static_cast<double>(gnssWindowsource[i].angularVelocityX),
+                                static_cast<double>(gnssWindowsource[i].angularVelocityY),
+                                static_cast<double>(gnssWindowsource[i].angularVelocityZ)
                             );
-                            currDataFrame.imu_data_vec[i].timestamp = gnss_window_source[i].unixTime;
+                            currDataFrame.imu_data_vec[i].timestamp = gnssWindowsource[i].unixTime;
                         }
                     }
                 ); // End of parallel_invoke
@@ -841,74 +841,66 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
 
     while (running_.load(std::memory_order_acquire)) {
         try {
-            decodeNav::DataFrameID20 current_frame;
-            if (!gnss_buffer_.pop(current_frame)) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            decodeNav::DataFrameID20 currFrame;
+            if (!gnss_buffer_.pop(currFrame)) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             }
 
-            if (!has_previous_frame_) {
+            if (is_firstFrame) {
                 // --- Handle the very first frame ---
                 // Calculate and cache the initial rotation
-                previous_R_world_ = navMath::Cb2n(navMath::getQuat(
-                    current_frame.roll, current_frame.pitch, current_frame.yaw
+                Eigen::Matrix3d R_mr = navMath::Cb2n(navMath::getQuat(
+                    currFrame.roll, currFrame.pitch, currFrame.yaw
                 ));
 
                 // Initialize the global pose state
-                current_global_pose_ = Eigen::Matrix4d::Identity();
-                current_global_pose_.block<3, 3>(0, 0) = previous_R_world_;
-                odometry_->T_i_r_gt_poses.push_back(current_global_pose_);
+                T_mr_ = Eigen::Matrix4d::Identity();
+                T_mr_.block<3, 3>(0, 0) = R_mr;
+                odometry_->T_i_r_gt_poses.push_back(T_mr_);
 
                 // Set trackers for the next iteration
-                previous_id20_frame_ = current_frame;
-                has_previous_frame_ = true;
+                originFrame = currFrame;
 
-                finalicp::traj::Time Time(current_frame.unixTime);
+                finalicp::traj::Time Time(currFrame.unixTime);
+
+                is_firstFrame = false;
 
                 outfile << Time.nanosecs() << " " 
-                << current_frame.latitude << " " << current_frame.longitude << " " << current_frame.altitude << "\n"; 
+                << currFrame.latitude << " " << currFrame.longitude << " " << currFrame.altitude
+                 << currFrame.roll << " " << currFrame.pitch << " " << currFrame.yaw;  "\n"; 
                 
                 outfile << Time.nanosecs() << " " 
-                << current_global_pose_(0, 0) << " " << current_global_pose_(0, 1) << " " << current_global_pose_(0, 2) << " " << current_global_pose_(0, 3) << " "
-                << current_global_pose_(1, 0) << " " << current_global_pose_(1, 1) << " " << current_global_pose_(1, 2) << " " << current_global_pose_(1, 3) << " "
-                << current_global_pose_(2, 0) << " " << current_global_pose_(2, 1) << " " << current_global_pose_(2, 2) << " " << current_global_pose_(2, 3) << " "
-                << current_global_pose_(3, 0) << " " << current_global_pose_(3, 1) << " " << current_global_pose_(3, 2) << " " << current_global_pose_(3, 3) << "\n";
+                << T_mr_(0, 0) << " " << T_mr_(0, 1) << " " << T_mr_(0, 2) << " " << T_mr_(0, 3) << " "
+                << T_mr_(1, 0) << " " << T_mr_(1, 1) << " " << T_mr_(1, 2) << " " << T_mr_(1, 3) << " "
+                << T_mr_(2, 0) << " " << T_mr_(2, 1) << " " << T_mr_(2, 2) << " " << T_mr_(2, 3) << " "
+                << T_mr_(3, 0) << " " << T_mr_(3, 1) << " " << T_mr_(3, 2) << " " << T_mr_(3, 3) << "\n";
                 
             } else {
                 // --- Handle all subsequent frames ---
                 // OPTIMIZATION 1: Avoid re-calculating the previous rotation matrix
-                Eigen::Matrix3d R_curr_world = navMath::Cb2n(navMath::getQuat(
-                    current_frame.roll, current_frame.pitch, current_frame.yaw
+                Eigen::Matrix3d R_mr = navMath::Cb2n(navMath::getQuat(
+                    currFrame.roll, currFrame.pitch, currFrame.yaw
                 ));
-                Eigen::Matrix3d R_relative = previous_R_world_.transpose() * R_curr_world;
 
-                Eigen::Vector3d relative_position = navMath::LLA2NED(
-                    current_frame.latitude, current_frame.longitude, current_frame.altitude,
-                    previous_id20_frame_.latitude, previous_id20_frame_.longitude, previous_id20_frame_.altitude
+                Eigen::Vector3d t_mr = navMath::LLA2NED(
+                    currFrame.latitude, currFrame.longitude, currFrame.altitude,
+                    originFrame.latitude, originFrame.longitude, originFrame.altitude
                 );
-
-                // OPTIMIZATION 2: Decompose the 4x4 multiplication for fewer operations
-                // Old pose components
-                Eigen::Matrix3d R_global_old = current_global_pose_.block<3, 3>(0, 0);
-                Eigen::Vector3d t_global_old = current_global_pose_.block<3, 1>(0, 3);
                 
                 // New pose components: t_new = R_old * t_rel + t_old
-                current_global_pose_.block<3, 3>(0, 0) = R_global_old * R_relative;
-                current_global_pose_.block<3, 1>(0, 3) = R_global_old * relative_position + t_global_old;
-                odometry_->T_i_r_gt_poses.push_back(current_global_pose_);
-
-                // Update trackers for the next iteration
-                previous_id20_frame_ = current_frame;
-                previous_R_world_ = R_curr_world; // Cache the current rotation for the next loop
+                T_mr_.block<3, 3>(0, 0) = R_mr;
+                T_mr_.block<3, 1>(0, 3) = t_mr;
+                odometry_->T_i_r_gt_poses.push_back(T_mr_);
 
                 std::ostringstream oss;
-                finalicp::traj::Time Time(current_frame.unixTime);
+                finalicp::traj::Time Time(currFrame.unixTime);
 
                 outfile << Time.nanosecs() << " " 
-                << current_global_pose_(0, 0) << " " << current_global_pose_(0, 1) << " " << current_global_pose_(0, 2) << " " << current_global_pose_(0, 3) << " "
-                << current_global_pose_(1, 0) << " " << current_global_pose_(1, 1) << " " << current_global_pose_(1, 2) << " " << current_global_pose_(1, 3) << " "
-                << current_global_pose_(2, 0) << " " << current_global_pose_(2, 1) << " " << current_global_pose_(2, 2) << " " << current_global_pose_(2, 3) << " "
-                << current_global_pose_(3, 0) << " " << current_global_pose_(3, 1) << " " << current_global_pose_(3, 2) << " " << current_global_pose_(3, 3) << "\n";
+                << T_mr_(0, 0) << " " << T_mr_(0, 1) << " " << T_mr_(0, 2) << " " << T_mr_(0, 3) << " "
+                << T_mr_(1, 0) << " " << T_mr_(1, 1) << " " << T_mr_(1, 2) << " " << T_mr_(1, 3) << " "
+                << T_mr_(2, 0) << " " << T_mr_(2, 1) << " " << T_mr_(2, 2) << " " << T_mr_(2, 3) << " "
+                << T_mr_(3, 0) << " " << T_mr_(3, 1) << " " << T_mr_(3, 2) << " " << T_mr_(3, 3) << "\n";
 
             }
         } catch (const std::exception& e) {
@@ -922,8 +914,3 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
 }
 
 // -----------------------------------------------------------------------------
-
-
-
-
-
