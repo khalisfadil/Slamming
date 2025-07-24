@@ -873,12 +873,12 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
 
                 // Output the original LLA data for the origin
                 finalicp::traj::Time Time(currFrame.unixTime);
-                outfile << Time.nanosecs() << " "
+                outfile << std::fixed << std::setprecision(12) << Time.nanosecs() << " " 
                 << currFrame.latitude << " " << currFrame.longitude << " " << currFrame.altitude
                 << currFrame.roll << " " << currFrame.pitch << " " << currFrame.yaw << "\n";
 
                 
-                outfile << Time.nanosecs() << " " 
+                outfile << std::fixed << std::setprecision(12) << Time.nanosecs() << " " 
                 << T_rm_(0, 0) << " " << T_rm_(0, 1) << " " << T_rm_(0, 2) << " " << T_rm_(0, 3) << " "
                 << T_rm_(1, 0) << " " << T_rm_(1, 1) << " " << T_rm_(1, 2) << " " << T_rm_(1, 3) << " "
                 << T_rm_(2, 0) << " " << T_rm_(2, 1) << " " << T_rm_(2, 2) << " " << T_rm_(2, 3) << " "
@@ -910,7 +910,7 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
                 std::ostringstream oss;
                 finalicp::traj::Time Time(currFrame.unixTime);
 
-                outfile << Time.nanosecs() << " " 
+                outfile << std::fixed << std::setprecision(12) << Time.nanosecs() << " " 
                 << T_rm_(0, 0) << " " << T_rm_(0, 1) << " " << T_rm_(0, 2) << " " << T_rm_(0, 3) << " "
                 << T_rm_(1, 0) << " " << T_rm_(1, 1) << " " << T_rm_(1, 2) << " " << T_rm_(1, 3) << " "
                 << T_rm_(2, 0) << " " << T_rm_(2, 1) << " " << T_rm_(2, 2) << " " << T_rm_(2, 3) << " "
