@@ -735,21 +735,27 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                 continue;
             } else {
 
-                if(!init_){
-                    // --- Handle the very first frame ---
-                    Eigen::Matrix4d T_mr;
+                if (!init_) {
+                    // --- Handle the very first frame: Initialize with T_rm ---
                     decodeNav::DataFrameID20 currFrame = tempCombineddata.GnssWindow.back();
-                    // Calculate and cache the initial rotation
+
+                    // 1. Calculate the rotation from robot to map (R_mr) as before.
                     Eigen::Matrix3d R_mr = navMath::Cb2n(navMath::getQuat(
                         currFrame.roll, currFrame.pitch, currFrame.yaw
                     ));
 
-                    // Initialize the global pose state
-                    T_mr = Eigen::Matrix4d::Identity();
-                    T_mr.block<3, 3>(0, 0) = R_mr;
+                    // 2. Efficiently get the inverse rotation (R_rm) via transpose.
+                    // This calculates the rotation from map to robot.
+                    Eigen::Matrix3d R_rm = R_mr.transpose();
 
-                    // The dynamic_pointer_cast is no longer needed polymorphsm
-                    odometry_->initTmr(T_mr);
+                    // 3. Construct the T_rm transformation matrix.
+                    // Since initial translation is zero, no other calculation is needed.
+                    Eigen::Matrix4d T_rm = Eigen::Matrix4d::Identity();
+                    T_rm.block<3, 3>(0, 0) = R_rm;
+
+                    // 4. Initialize the odometry with the T_rm pose.
+                    //    (Assuming the odometry class is the one from the previous context that expects T_rm).
+                    odometry_->initT(T_rm);
 
                     init_ = true;
                     finalicp::traj::Time Time(currFrame.unixTime);
@@ -807,13 +813,13 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                 ); // End of parallel_invoke
 
                 // ################################# MAIN !!!!
-                // const auto summary = odometry_->registerFrame(currDataFrame);
+                const auto summary = odometry_->registerFrame(currDataFrame);
 
-//                 if (!summary.success){
-// #ifdef DEBUG
-//                     logMessage("WARNING", "State estimation failed.");
-// #endif 
-//                 }
+                if (!summary.success){
+#ifdef DEBUG
+                    logMessage("WARNING", "State estimation failed.");
+#endif 
+                }
             }
         } catch (const std::exception& e) {
 #ifdef DEBUG
@@ -835,7 +841,7 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
         std::ostringstream oss;
         oss << "[" << std::put_time(std::gmtime(&now_time_t), "%Y-%m-%dT%H:%M:%SZ") << "] "
             << "[ERROR] failed to open file " << filename << " for writing.\n";
-        std::cerr << oss.str(); // Fallback to cerr if file cannot be opened
+        std::cerr << oss.str();
         return;
     }
 
@@ -847,34 +853,36 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
                 continue;
             }
 
-            if (is_firstFrame) {
+            if (is_firstFrame_) {
                 // --- Handle the very first frame ---
-                // Calculate and cache the initial rotation
+                // 1. Calculate the rotation from robot to map (R_mr)
                 Eigen::Matrix3d R_mr = navMath::Cb2n(navMath::getQuat(
                     currFrame.roll, currFrame.pitch, currFrame.yaw
                 ));
 
-                // Initialize the global pose state
-                T_mr_ = Eigen::Matrix4d::Identity();
-                T_mr_.block<3, 3>(0, 0) = R_mr;
-                odometry_->T_i_r_gt_poses.push_back(T_mr_);
+                // 2. Get the inverse rotation (R_rm) via transpose
+                Eigen::Matrix3d R_rm = R_mr.transpose();
+
+                // 3. Assemble T_rm (initial translation is zero)
+                T_rm_ = Eigen::Matrix4d::Identity();
+                T_rm_.block<3, 3>(0, 0) = R_rm;
 
                 // Set trackers for the next iteration
-                originFrame = currFrame;
+                originFrame_ = currFrame;
+                is_firstFrame_ = false;
 
+                // Output the original LLA data for the origin
                 finalicp::traj::Time Time(currFrame.unixTime);
-
-                is_firstFrame = false;
-
-                outfile << Time.nanosecs() << " " 
+                outfile << Time.nanosecs() << " "
                 << currFrame.latitude << " " << currFrame.longitude << " " << currFrame.altitude
-                << currFrame.roll << " " << currFrame.pitch << " " << currFrame.yaw << "\n"; 
+                << currFrame.roll << " " << currFrame.pitch << " " << currFrame.yaw << "\n";
+
                 
                 outfile << Time.nanosecs() << " " 
-                << T_mr_(0, 0) << " " << T_mr_(0, 1) << " " << T_mr_(0, 2) << " " << T_mr_(0, 3) << " "
-                << T_mr_(1, 0) << " " << T_mr_(1, 1) << " " << T_mr_(1, 2) << " " << T_mr_(1, 3) << " "
-                << T_mr_(2, 0) << " " << T_mr_(2, 1) << " " << T_mr_(2, 2) << " " << T_mr_(2, 3) << " "
-                << T_mr_(3, 0) << " " << T_mr_(3, 1) << " " << T_mr_(3, 2) << " " << T_mr_(3, 3) << "\n";
+                << T_rm_(0, 0) << " " << T_rm_(0, 1) << " " << T_rm_(0, 2) << " " << T_rm_(0, 3) << " "
+                << T_rm_(1, 0) << " " << T_rm_(1, 1) << " " << T_rm_(1, 2) << " " << T_rm_(1, 3) << " "
+                << T_rm_(2, 0) << " " << T_rm_(2, 1) << " " << T_rm_(2, 2) << " " << T_rm_(2, 3) << " "
+                << T_rm_(3, 0) << " " << T_rm_(3, 1) << " " << T_rm_(3, 2) << " " << T_rm_(3, 3) << "\n";
                 
             } else {
                 // --- Handle all subsequent frames ---
@@ -885,22 +893,28 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
 
                 Eigen::Vector3d t_mr = navMath::LLA2NED(
                     currFrame.latitude, currFrame.longitude, currFrame.altitude,
-                    originFrame.latitude, originFrame.longitude, originFrame.altitude
+                    originFrame_.latitude, originFrame_.longitude, originFrame_.altitude
                 );
+
+                // 2. Efficiently compute the inverse components (for T_rm)
+                Eigen::Matrix3d R_rm = R_mr.transpose();
+                Eigen::Vector3d t_rm = -R_rm * t_mr; // t_rm = -R_mr^T * t_mr
+
+                // 3. Assemble the final T_rm matrix
+                T_rm_ = Eigen::Matrix4d::Identity();
+                T_rm_.block<3, 3>(0, 0) = R_rm;
+                T_rm_.block<3, 1>(0, 3) = t_rm;
                 
-                // New pose components: t_new = R_old * t_rel + t_old
-                T_mr_.block<3, 3>(0, 0) = R_mr;
-                T_mr_.block<3, 1>(0, 3) = t_mr;
-                odometry_->T_i_r_gt_poses.push_back(T_mr_);
+                odometry_->T_i_r_gt_poses.push_back(T_rm_);
 
                 std::ostringstream oss;
                 finalicp::traj::Time Time(currFrame.unixTime);
 
                 outfile << Time.nanosecs() << " " 
-                << T_mr_(0, 0) << " " << T_mr_(0, 1) << " " << T_mr_(0, 2) << " " << T_mr_(0, 3) << " "
-                << T_mr_(1, 0) << " " << T_mr_(1, 1) << " " << T_mr_(1, 2) << " " << T_mr_(1, 3) << " "
-                << T_mr_(2, 0) << " " << T_mr_(2, 1) << " " << T_mr_(2, 2) << " " << T_mr_(2, 3) << " "
-                << T_mr_(3, 0) << " " << T_mr_(3, 1) << " " << T_mr_(3, 2) << " " << T_mr_(3, 3) << "\n";
+                << T_rm_(0, 0) << " " << T_rm_(0, 1) << " " << T_rm_(0, 2) << " " << T_rm_(0, 3) << " "
+                << T_rm_(1, 0) << " " << T_rm_(1, 1) << " " << T_rm_(1, 2) << " " << T_rm_(1, 3) << " "
+                << T_rm_(2, 0) << " " << T_rm_(2, 1) << " " << T_rm_(2, 2) << " " << T_rm_(2, 3) << " "
+                << T_rm_(3, 0) << " " << T_rm_(3, 1) << " " << T_rm_(3, 2) << " " << T_rm_(3, 3) << "\n";
 
             }
         } catch (const std::exception& e) {

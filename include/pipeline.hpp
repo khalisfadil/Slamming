@@ -94,20 +94,19 @@ class SLAMPipeline {
         // runGroundTruthEstimation
         stateestimate::Odometry::Ptr odometry_; 
         const size_t GT_SIZE_COMPASS = 120000;
-        bool is_firstFrame = true;
-        Eigen::Matrix4d T_mr_ = Eigen::Matrix4d::Identity();
-        decodeNav::DataFrameID20 originFrame;
+        bool is_firstFrame_ = true;
+        Eigen::Matrix4d T_rm_ = Eigen::Matrix4d::Identity();
+        decodeNav::DataFrameID20 originFrame_;
         Eigen::Matrix3d prev_R_mr_;
 
         // runLioStateEstimation
         bool init_ = false;
         
-
         // runOusterLidarListener
         lidarDecode::OusterLidarCallback lidarCallback_;
         uint16_t frame_id_= 0;
 
-        //runGNSSListener
+        // runGNSSListener
         decodeNav::GnssCompassCallback gnssCallback_;
         // decodeNav::DataFrameID20 temp_gnss_ID20_data_;
         std::deque<decodeNav::DataFrameID20> gnss_data_window_;
