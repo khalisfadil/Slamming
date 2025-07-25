@@ -769,7 +769,7 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
 
                 stateestimate::DataFrame currDataFrame;
                 std::vector<lidarDecode::Point3D> tempLidarframe = tempCombineddata.Lidar.toPoint3D();
-                
+                currDataFrame.timestamp = tempCombineddata.Lidar.timestamp;
                 // Use tbb::parallel_invoke to run both conversion tasks concurrently
                 tbb::parallel_invoke(
                     [&] {
