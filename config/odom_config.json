@@ -2,7 +2,7 @@
     "output_dir": "./outputs",
     "odometry_options": {
 
-        "init_num_frames": 10,
+        "init_num_frames": 20,
         "init_voxel_size": 0.2,
         "voxel_size": 0.2,
         "init_sample_voxel_size": 0.2,
