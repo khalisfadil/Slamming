@@ -1,9 +1,6 @@
 [submodule "extern/LidarDecode"]
 	path = extern/LidarDecode
 	url = https://github.com/khalisfadil/LidarDecode.git
-[submodule "extern/FinalStateEstimation"]
-	path = extern/FinalStateEstimation
-	url = https://github.com/khalisfadil/FinalStateEstimation.git
 [submodule "extern/FinalICP"]
 	path = extern/FinalICP
 	url = https://github.com/khalisfadil/FinalICP.git
@@ -16,3 +13,6 @@
 [submodule "extern/GNSSKompass"]
 	path = extern/GNSSKompass
 	url = https://github.com/khalisfadil/GNSSKompass.git
+[submodule "extern/FinalStateEstimation"]
+	path = extern/FinalStateEstimation
+	url = https://github.com/khalisfadil/FinalStateEstimation.git
