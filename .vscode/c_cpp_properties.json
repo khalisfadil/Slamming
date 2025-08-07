@@ -1,0 +1,28 @@
+{
+    "configurations": [
+        {
+            "name": "Kubuntu GCC",
+            "includePath": [
+                "/usr/include/eigen3",
+                "/usr/local/include/tbb",
+                "/usr/include/boost",
+                "/usr/local/include/open3d",
+                "/usr/include/nlohmann",
+                "${workspaceFolder}/include/**",
+                "${workspaceFolder}/include/**/**",
+                "${workspaceFolder}/extern/FinalStateEstimation/include/**",
+                "${workspaceFolder}/extern/FinalICP/include/**",
+                "${workspaceFolder}/extern/liegroupMath/include/**",
+                "${workspaceFolder}/extern/GNSSKompass/include/**",
+                "${workspaceFolder}/extern/LidarDecode/include/**",
+                "${workspaceFolder}/3rdparty/robin-map/include/tsl/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
