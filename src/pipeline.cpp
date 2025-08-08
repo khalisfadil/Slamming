@@ -739,23 +739,23 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                     // --- Handle the very first frame: Initialize with T_rm ---
                     decodeNav::DataFrameID20 currFrame = tempCombineddata.GnssWindow.back();
 
-                    // 1. Calculate the rotation from robot to map (R_mr) as before.
-                    Eigen::Matrix3d R_mr = navMath::Cb2n(navMath::getQuat(
+                    // 1. Calculate the rotation from robot to map (R_mr) as before. R navigation frame <- body
+                    Eigen::Matrix3d Rb2m = navMath::Cb2n(navMath::getQuat(
                         currFrame.roll, currFrame.pitch, currFrame.yaw
                     ));
 
                     // 2. Efficiently get the inverse rotation (R_rm) via transpose.
                     // This calculates the rotation from map to robot.
-                    Eigen::Matrix3d R_rm = R_mr.transpose();
+                    Eigen::Matrix3d Rm2b = Rb2m.transpose();
 
                     // 3. Construct the T_rm transformation matrix.
                     // Since initial translation is zero, no other calculation is needed.
-                    Eigen::Matrix4d T_rm = Eigen::Matrix4d::Identity();
-                    T_rm.block<3, 3>(0, 0) = R_rm;
+                    Eigen::Matrix4d Tm2b = Eigen::Matrix4d::Identity();
+                    Tm2b.block<3, 3>(0, 0) = Rm2b;
 
                     // 4. Initialize the odometry with the T_rm pose.
                     //    (Assuming the odometry class is the one from the previous context that expects T_rm).
-                    odometry_->initT(T_rm);
+                    odometry_->initT(Tm2b);
 
                     init_ = true;
                     finalicp::traj::Time Time(currFrame.unixTime);
