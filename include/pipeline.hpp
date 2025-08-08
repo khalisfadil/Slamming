@@ -64,7 +64,7 @@ class SLAMPipeline {
 
         boost::lockfree::spsc_queue<std::string, boost::lockfree::capacity<128>> log_queue_;
 
-        explicit SLAMPipeline(const std::string& odom_json_path, const std::string& lidar_json_path); // Constructor with JSON file path
+        explicit SLAMPipeline(const std::string& odom_json_path, const std::string& lidar_json_path, const lidarDecode::OusterLidarCallback::LidarTransformPreset& T_preset); // Constructor with JSON file path
     
         static void signalHandler(int signal);
         void setThreadAffinity(const std::vector<int>& coreIDs);
@@ -95,9 +95,8 @@ class SLAMPipeline {
         stateestimate::Odometry::Ptr odometry_; 
         const size_t GT_SIZE_COMPASS = 120000;
         bool is_firstFrame_ = true;
-        Eigen::Matrix4d T_rm_ = Eigen::Matrix4d::Identity();
         decodeNav::DataFrameID20 originFrame_;
-        Eigen::Matrix3d prev_R_mr_;
+        Eigen::Matrix3d prev_Rb2m_;
 
         // runLioStateEstimation
         bool init_ = false;

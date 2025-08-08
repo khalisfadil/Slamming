@@ -20,10 +20,9 @@ void SLAMPipeline::logMessage(const std::string& level, const std::string& messa
 
 // -----------------------------------------------------------------------------
 
-SLAMPipeline::SLAMPipeline(const std::string& odom_json_path, const std::string& lidar_json_path) 
+SLAMPipeline::SLAMPipeline(const std::string& odom_json_path, const std::string& lidar_json_path, const lidarDecode::OusterLidarCallback::LidarTransformPreset& T_preset) 
     : odometry_(stateestimate::Odometry::Get("SLAM_LIDAR_INERTIAL_ODOM", odom_json_path)), // <-- INITIALIZE HERE, 
-    lidarCallback_(lidar_json_path) {// You can initialize other members here too
-    
+    lidarCallback_(lidar_json_path, T_preset) {// You can initialize other members here too
     temp_IMU_vec_data_.reserve(VECTOR_SIZE_IMU);
     odometry_->T_i_r_gt_poses.reserve(GT_SIZE_COMPASS);
 
@@ -856,16 +855,16 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
             if (is_firstFrame_) {
                 // --- Handle the very first frame ---
                 // 1. Calculate the rotation from robot to map (R_mr)
-                Eigen::Matrix3d R_mr = navMath::Cb2n(navMath::getQuat(
+                Eigen::Matrix3d Rb2m = navMath::Cb2n(navMath::getQuat(
                     currFrame.roll, currFrame.pitch, currFrame.yaw
                 ));
 
                 // 2. Get the inverse rotation (R_rm) via transpose
-                Eigen::Matrix3d R_rm = R_mr.transpose();
+                Eigen::Matrix3d Rm2b = Rb2m.transpose();
 
                 // 3. Assemble T_rm (initial translation is zero)
-                T_rm_ = Eigen::Matrix4d::Identity();
-                T_rm_.block<3, 3>(0, 0) = R_rm;
+                Eigen::Matrix4d Tm2b = Eigen::Matrix4d::Identity();
+                Tm2b.block<3, 3>(0, 0) = Rm2b;
 
                 // Set trackers for the next iteration
                 originFrame_ = currFrame;
@@ -879,42 +878,42 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
 
                 
                 outfile << std::fixed << std::setprecision(12) << Time.nanosecs() << " " 
-                << T_rm_(0, 0) << " " << T_rm_(0, 1) << " " << T_rm_(0, 2) << " " << T_rm_(0, 3) << " "
-                << T_rm_(1, 0) << " " << T_rm_(1, 1) << " " << T_rm_(1, 2) << " " << T_rm_(1, 3) << " "
-                << T_rm_(2, 0) << " " << T_rm_(2, 1) << " " << T_rm_(2, 2) << " " << T_rm_(2, 3) << " "
-                << T_rm_(3, 0) << " " << T_rm_(3, 1) << " " << T_rm_(3, 2) << " " << T_rm_(3, 3) << "\n";
+                << Tm2b(0, 0) << " " << Tm2b(0, 1) << " " << Tm2b(0, 2) << " " << Tm2b(0, 3) << " "
+                << Tm2b(1, 0) << " " << Tm2b(1, 1) << " " << Tm2b(1, 2) << " " << Tm2b(1, 3) << " "
+                << Tm2b(2, 0) << " " << Tm2b(2, 1) << " " << Tm2b(2, 2) << " " << Tm2b(2, 3) << " "
+                << Tm2b(3, 0) << " " << Tm2b(3, 1) << " " << Tm2b(3, 2) << " " << Tm2b(3, 3) << "\n";
                 
             } else {
                 // --- Handle all subsequent frames ---
                 // OPTIMIZATION 1: Avoid re-calculating the previous rotation matrix
-                Eigen::Matrix3d R_mr = navMath::Cb2n(navMath::getQuat(
+                Eigen::Matrix3d Rb2m = navMath::Cb2n(navMath::getQuat(
                     currFrame.roll, currFrame.pitch, currFrame.yaw
                 ));
 
-                Eigen::Vector3d t_mr = navMath::LLA2NED(
+                Eigen::Vector3d tb2m = navMath::LLA2NED(    // recheck if it is true b2m
                     currFrame.latitude, currFrame.longitude, currFrame.altitude,
                     originFrame_.latitude, originFrame_.longitude, originFrame_.altitude
                 );
 
-                // 2. Efficiently compute the inverse components (for T_rm)
-                Eigen::Matrix3d R_rm = R_mr.transpose();
-                Eigen::Vector3d t_rm = -R_rm * t_mr; // t_rm = -R_mr^T * t_mr
+                // 2. Efficiently compute the inverse components (for Tm2b)
+                Eigen::Matrix3d Rm2b = Rb2m.transpose();
+                Eigen::Vector3d tm2b = -Rm2b * tb2m; // tm2b = -Rb2m^T * tb2m
 
                 // 3. Assemble the final T_rm matrix
-                T_rm_ = Eigen::Matrix4d::Identity();
-                T_rm_.block<3, 3>(0, 0) = R_rm;
-                T_rm_.block<3, 1>(0, 3) = t_rm;
+                Eigen::Matrix4d Tm2b = Eigen::Matrix4d::Identity();
+                Tm2b.block<3, 3>(0, 0) = Rm2b;
+                Tm2b.block<3, 1>(0, 3) = tm2b;
                 
-                odometry_->T_i_r_gt_poses.push_back(T_rm_);
+                odometry_->T_i_r_gt_poses.push_back(Tm2b);
 
                 std::ostringstream oss;
                 finalicp::traj::Time Time(currFrame.unixTime);
 
                 outfile << std::fixed << std::setprecision(12) << Time.nanosecs() << " " 
-                << T_rm_(0, 0) << " " << T_rm_(0, 1) << " " << T_rm_(0, 2) << " " << T_rm_(0, 3) << " "
-                << T_rm_(1, 0) << " " << T_rm_(1, 1) << " " << T_rm_(1, 2) << " " << T_rm_(1, 3) << " "
-                << T_rm_(2, 0) << " " << T_rm_(2, 1) << " " << T_rm_(2, 2) << " " << T_rm_(2, 3) << " "
-                << T_rm_(3, 0) << " " << T_rm_(3, 1) << " " << T_rm_(3, 2) << " " << T_rm_(3, 3) << "\n";
+                << Tm2b(0, 0) << " " << Tm2b(0, 1) << " " << Tm2b(0, 2) << " " << Tm2b(0, 3) << " "
+                << Tm2b(1, 0) << " " << Tm2b(1, 1) << " " << Tm2b(1, 2) << " " << Tm2b(1, 3) << " "
+                << Tm2b(2, 0) << " " << Tm2b(2, 1) << " " << Tm2b(2, 2) << " " << Tm2b(2, 3) << " "
+                << Tm2b(3, 0) << " " << Tm2b(3, 1) << " " << Tm2b(3, 2) << " " << Tm2b(3, 3) << "\n";
 
             }
         } catch (const std::exception& e) {
