@@ -733,6 +733,10 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             } else {
+#ifdef DEBUG
+                 // --- Start Timer ---
+                auto start_time = std::chrono::high_resolution_clock::now();
+#endif 
 
                 if (!init_) {
                     // --- Handle the very first frame: Initialize with T_rm ---
@@ -813,6 +817,17 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
 
                 // ################################# MAIN !!!!
                 const auto summary = odometry_->registerFrame(currDataFrame);
+
+                // --- Stop Timer ---
+#ifdef DEBUG
+                auto end_time = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+
+                std::ostringstream oss_timer;
+                oss_timer << "LIO frame processing time: " << duration.count() << " ms.";
+                logMessage("TIMER", oss_timer.str());
+#endif 
 
                 if (!summary.success){
 #ifdef DEBUG

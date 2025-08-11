@@ -60,7 +60,7 @@ class SLAMPipeline {
         boost::lockfree::spsc_queue<decodeNav::DataFrameID20, boost::lockfree::capacity<128>> gnss_intern_buffer_;
 
         boost::lockfree::spsc_queue<LidarIMUVecDataFrame, boost::lockfree::capacity<128>> lidar_imu_buffer_;
-        boost::lockfree::spsc_queue<LidarGnssWindowDataFrame, boost::lockfree::capacity<128>> lidar_gnsswindow_buffer_;
+        boost::lockfree::spsc_queue<LidarGnssWindowDataFrame, boost::lockfree::capacity<131072>> lidar_gnsswindow_buffer_;
 
         boost::lockfree::spsc_queue<std::string, boost::lockfree::capacity<128>> log_queue_;
 
