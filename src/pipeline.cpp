@@ -734,7 +734,7 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
                 continue;
             } else {
 #ifdef DEBUG
-                 // --- Start Timer ---
+                // --- Start Timer ---
                 auto start_time = std::chrono::high_resolution_clock::now();
 #endif 
 
