@@ -888,7 +888,7 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
                 // Output the original LLA data for the origin
                 finalicp::traj::Time Time(currFrame.unixTime);
                 outfile << std::fixed << std::setprecision(12) << Time.nanosecs() << " " 
-                << currFrame.latitude << " " << currFrame.longitude << " " << currFrame.altitude
+                << currFrame.latitude << " " << currFrame.longitude << " " << currFrame.altitude << " "
                 << currFrame.roll << " " << currFrame.pitch << " " << currFrame.yaw << "\n";
 
                 

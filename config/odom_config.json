@@ -3,12 +3,12 @@
     "odometry_options": {
 
         "init_num_frames": 20,
-        "init_voxel_size": 0.1,
-        "voxel_size": 0.1,
-        "init_sample_voxel_size": 0.1,
-        "sample_voxel_size": 0.1,
+        "init_voxel_size": 0.5,
+        "voxel_size": 0.5,
+        "init_sample_voxel_size": 0.5,
+        "sample_voxel_size": 0.5,
 
-        "size_voxel_map": 0.1,
+        "size_voxel_map": 0.5,
         "min_distance_points": 0.1,
         "max_num_points_in_voxel": 20,
         "max_distance": 1000.0,
