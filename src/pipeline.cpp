@@ -721,7 +721,7 @@ void SLAMPipeline::dataAlignmentID20(const std::vector<int>& allowedCores) {
 
 void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
     setThreadAffinity(allowedCores);
-    // tbb::global_control gc(tbb::global_control::max_allowed_parallelism, num_threads_);
+    tbb::global_control gc(tbb::global_control::max_allowed_parallelism, allowedCores.size());
     while (running_.load(std::memory_order_acquire)) {
         try {
             
