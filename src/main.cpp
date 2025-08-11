@@ -61,7 +61,7 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    SLAMPipeline pipeline(config_json, lidar_json);
+    SLAMPipeline pipeline(config_json, lidar_json, lidarDecode::OusterLidarCallback::LidarTransformPreset::GEHLSDORF20250410);
 
     struct sigaction sigIntHandler;
     sigIntHandler.sa_handler = SLAMPipeline::signalHandler;
