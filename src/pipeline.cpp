@@ -4,7 +4,6 @@ using json = nlohmann::json;
 
 std::atomic<bool> SLAMPipeline::running_{true};
 std::condition_variable SLAMPipeline::globalCV_;
-std::mutex SLAMPipeline::global_mutex_;
 
 // -----------------------------------------------------------------------------
 
@@ -849,136 +848,118 @@ void SLAMPipeline::runLioStateEstimation(const std::vector<int>& allowedCores){
 void SLAMPipeline::runLoStateEstimation(const std::vector<int>& allowedCores){
     setThreadAffinity(allowedCores);
     tbb::global_control gc(tbb::global_control::max_allowed_parallelism, allowedCores.size());
-    
     while (running_.load(std::memory_order_acquire)) {
         try {
-            LidarGnssWindowDataFrame tempCombineddata;
-
-            // --- OPTIMIZATION START: Replace Polling with Condition Variable Wait ---
-            {
-                // 1. Acquire a lock on the global mutex. The lock is required for the condition variable.
-                std::unique_lock<std::mutex> lock(global_mutex_);
-                
-                // 2. Wait efficiently until one of two conditions is met:
-                //    - The buffer is no longer empty (new data has arrived).
-                //    - The program is shutting down (running_ is false).
-                // This call consumes no CPU while waiting.
-                globalCV_.wait(lock, [&] {
-                    return !lidar_gnsswindow_buffer_.empty() || !running_.load(std::memory_order_relaxed);
-                });
-            } // The lock is automatically released here upon exiting the scope.
-
-            // 3. After waking, check if the cause was a shutdown signal AND the buffer is empty.
-            //    This ensures we process any remaining data in the buffer before exiting.
-            if (!running_.load(std::memory_order_acquire) && lidar_gnsswindow_buffer_.empty()) {
-                break; // Exit the while loop to terminate the thread.
-            }
-
-            // 4. Now, attempt to pop data from the buffer. This is a safeguard in case of a spurious wakeup
-            //    or if another consumer thread grabbed the data first.
-            if (!lidar_gnsswindow_buffer_.pop(tempCombineddata)) {
-                continue; // If pop somehow failed, simply loop again to wait.
-            }
-            // --- OPTIMIZATION END ---
             
-            // The rest of your original, highly-parallelized logic remains unchanged.
+            LidarGnssWindowDataFrame tempCombineddata;
+            if (!lidar_gnsswindow_buffer_.pop(tempCombineddata)) {
 #ifdef DEBUG
-            // --- Start Timer ---
-            auto start_time = std::chrono::high_resolution_clock::now();
+                // logMessage("WARNING", "runLioStateEstimation : Failed to retrieved LidarGnssWindowDataFrame SPSC."); 
+#endif
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            } else {
+#ifdef DEBUG
+                // --- Start Timer ---
+                auto start_time = std::chrono::high_resolution_clock::now();
 #endif 
 
-            if (!init_) {
-                // --- Handle the very first frame: Initialize with T_rm ---
-                decodeNav::DataFrameID20 currFrame = tempCombineddata.GnssWindow.back();
+                if (!init_) {
+                    // --- Handle the very first frame: Initialize with T_rm ---
+                    decodeNav::DataFrameID20 currFrame = tempCombineddata.GnssWindow.back();
 
-                // 1. Calculate the rotation from robot to map (R_mr) as before. R navigation frame <- body
-                Eigen::Matrix3d Rb2m = navMath::Cb2n(navMath::getQuat(
-                    currFrame.roll, currFrame.pitch, currFrame.yaw
-                ));
+                    // 1. Calculate the rotation from robot to map (R_mr) as before. R navigation frame <- body
+                    Eigen::Matrix3d Rb2m = navMath::Cb2n(navMath::getQuat(
+                        currFrame.roll, currFrame.pitch, currFrame.yaw
+                    ));
 
-                // 2. Efficiently get the inverse rotation (R_rm) via transpose.
-                // This calculates the rotation from map to robot.
-                Eigen::Matrix3d Rm2b = Rb2m.transpose();
+                    // 2. Efficiently get the inverse rotation (R_rm) via transpose.
+                    // This calculates the rotation from map to robot.
+                    Eigen::Matrix3d Rm2b = Rb2m.transpose();
 
-                // 3. Construct the T_rm transformation matrix.
-                // Since initial translation is zero, no other calculation is needed.
-                Eigen::Matrix4d Tm2b = Eigen::Matrix4d::Identity();
-                Tm2b.block<3, 3>(0, 0) = Rm2b;
+                    // 3. Construct the T_rm transformation matrix.
+                    // Since initial translation is zero, no other calculation is needed.
+                    Eigen::Matrix4d Tm2b = Eigen::Matrix4d::Identity();
+                    Tm2b.block<3, 3>(0, 0) = Rm2b;
 
-                // 4. Initialize the odometry with the T_rm pose.
-                odometry_->initT(Tm2b);
+                    // 4. Initialize the odometry with the T_rm pose.
+                    //    (Assuming the odometry class is the one from the previous context that expects T_rm).
+                    odometry_->initT(Tm2b);
 
-                init_ = true;
-                finalicp::traj::Time Time(currFrame.unixTime);
+                    init_ = true;
+                    finalicp::traj::Time Time(currFrame.unixTime);
 
-                std::ostringstream oss;
-                oss << "runLoStateEstimation (ORIGIN): " << Time.nanosecs() << " " 
-                << currFrame.latitude << " " << currFrame.longitude << " " << currFrame.altitude 
-                << currFrame.roll << " " << currFrame.pitch << " " << currFrame.yaw;
-                logMessage("LOGGING", oss.str());
-            }
-
-            stateestimate::DataFrame currDataFrame;
-            std::vector<lidarDecode::Point3D> tempLidarframe = tempCombineddata.Lidar.toPoint3D();
-            currDataFrame.timestamp = tempCombineddata.Lidar.timestamp;
-            // Use tbb::parallel_invoke to run both conversion tasks concurrently
-            tbb::parallel_invoke(
-                [&] {
-                    // --- Task 1: Parallel LiDAR Point Cloud Conversion (still beneficial) ---
-                    currDataFrame.pointcloud.resize(tempLidarframe.size());
-                    
-                    tbb::parallel_for(tbb::blocked_range<size_t>(0, tempLidarframe.size()),
-                        [&](const tbb::blocked_range<size_t>& r) {
-                            for (size_t i = r.begin(); i != r.end(); ++i) {
-                                currDataFrame.pointcloud[i].raw_pt = tempLidarframe[i].raw_pt;
-                                currDataFrame.pointcloud[i].pt = tempLidarframe[i].pt;
-                                currDataFrame.pointcloud[i].radial_velocity = tempLidarframe[i].radial_velocity;
-                                currDataFrame.pointcloud[i].alpha_timestamp = tempLidarframe[i].alpha_timestamp;
-                                currDataFrame.pointcloud[i].timestamp = tempLidarframe[i].timestamp;
-                                currDataFrame.pointcloud[i].beam_id = tempLidarframe[i].beam_id;
-                            }
-                        }
-                    );
-                },
-                [&] {
-                    // --- Task 2: Sequential IMU Data Conversion (more efficient for small N) ---
-                    const auto& gnssWindowsource = tempCombineddata.GnssWindow;
-                    currDataFrame.imu_data_vec.resize(gnssWindowsource.size());
-                    
-                    for (size_t i = 0; i < gnssWindowsource.size(); ++i) {
-                        currDataFrame.imu_data_vec[i].lin_acc = Eigen::Vector3d(
-                            static_cast<double>(gnssWindowsource[i].accelX),
-                            static_cast<double>(gnssWindowsource[i].accelY),
-                            static_cast<double>(gnssWindowsource[i].accelZ)
-                        );
-                        currDataFrame.imu_data_vec[i].ang_vel = Eigen::Vector3d(
-                            static_cast<double>(gnssWindowsource[i].angularVelocityX),
-                            static_cast<double>(gnssWindowsource[i].angularVelocityY),
-                            static_cast<double>(gnssWindowsource[i].angularVelocityZ)
-                        );
-                        currDataFrame.imu_data_vec[i].timestamp = gnssWindowsource[i].unixTime;
-                    }
+                    std::ostringstream oss;
+                    oss << "runLoStateEstimation (ORIGIN): " << Time.nanosecs() << " " 
+                    << currFrame.latitude << " " << currFrame.longitude << " " << currFrame.altitude 
+                    << currFrame.roll << " " << currFrame.pitch << " " << currFrame.yaw; 
+                    logMessage("LOGGING", oss.str());
                 }
-            ); // End of parallel_invoke
 
-            // ################################# MAIN !!!!
-            const auto summary = odometry_->registerFrame(currDataFrame);
+                stateestimate::DataFrame currDataFrame;
+                std::vector<lidarDecode::Point3D> tempLidarframe = tempCombineddata.Lidar.toPoint3D();
+                currDataFrame.timestamp = tempCombineddata.Lidar.timestamp;
+                // Use tbb::parallel_invoke to run both conversion tasks concurrently
+                tbb::parallel_invoke(
+                    [&] {
+                        // --- Task 1: Parallel LiDAR Point Cloud Conversion (still beneficial) ---
+                        currDataFrame.pointcloud.resize(tempLidarframe.size());
+                        
+                        tbb::parallel_for(tbb::blocked_range<size_t>(0, tempLidarframe.size()),
+                            [&](const tbb::blocked_range<size_t>& r) {
+                                for (size_t i = r.begin(); i != r.end(); ++i) {
+                                    // ... (point cloud data assignment) ...
+                                    currDataFrame.pointcloud[i].raw_pt = tempLidarframe[i].raw_pt;
+                                    currDataFrame.pointcloud[i].pt = tempLidarframe[i].pt;
+                                    currDataFrame.pointcloud[i].radial_velocity = tempLidarframe[i].radial_velocity;
+                                    currDataFrame.pointcloud[i].alpha_timestamp = tempLidarframe[i].alpha_timestamp;
+                                    currDataFrame.pointcloud[i].timestamp = tempLidarframe[i].timestamp;
+                                    currDataFrame.pointcloud[i].beam_id = tempLidarframe[i].beam_id;
+                                }
+                            }
+                        );
+                    },
+                    [&] {
+                        // --- Task 2: Sequential IMU Data Conversion (more efficient for small N) ---
+                        const auto& gnssWindowsource = tempCombineddata.GnssWindow;
+                        currDataFrame.imu_data_vec.resize(gnssWindowsource.size());
+                        
+                        // A simple sequential loop is faster here due to low iteration count
+                        for (size_t i = 0; i < gnssWindowsource.size(); ++i) {
+                            currDataFrame.imu_data_vec[i].lin_acc = Eigen::Vector3d(
+                                static_cast<double>(gnssWindowsource[i].accelX),
+                                static_cast<double>(gnssWindowsource[i].accelY),
+                                static_cast<double>(gnssWindowsource[i].accelZ)
+                            );
+                            currDataFrame.imu_data_vec[i].ang_vel = Eigen::Vector3d(
+                                static_cast<double>(gnssWindowsource[i].angularVelocityX),
+                                static_cast<double>(gnssWindowsource[i].angularVelocityY),
+                                static_cast<double>(gnssWindowsource[i].angularVelocityZ)
+                            );
+                            currDataFrame.imu_data_vec[i].timestamp = gnssWindowsource[i].unixTime;
+                        }
+                    }
+                ); // End of parallel_invoke
 
-            // --- Stop Timer ---
+                // ################################# MAIN !!!!
+                const auto summary = odometry_->registerFrame(currDataFrame);
+
+                // --- Stop Timer ---
 #ifdef DEBUG
-            auto end_time = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+                auto end_time = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
 
-            std::ostringstream oss_timer;
-            oss_timer << "LO frame processing time: " << duration.count() << " ms.";
-            logMessage("TIMER", oss_timer.str());
+                std::ostringstream oss_timer;
+                oss_timer << "LO frame processing time: " << duration.count() << " ms.";
+                logMessage("TIMER", oss_timer.str());
 #endif 
 
-            if (!summary.success){
+                if (!summary.success){
 #ifdef DEBUG
-                logMessage("WARNING", "State estimation failed.");
+                    logMessage("WARNING", "State estimation failed.");
 #endif 
+                }
             }
         } catch (const std::exception& e) {
 #ifdef DEBUG
@@ -1087,9 +1068,3 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
 }
 
 // -----------------------------------------------------------------------------
-
-void SLAMPipeline::saveOdometryResults(const std::string& timestamp) {
-    if (odometry_) {
-        odometry_->saveResults(timestamp);
-    }
-}
