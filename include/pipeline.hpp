@@ -48,6 +48,7 @@ class SLAMPipeline {
 
         static std::atomic<bool> running_;
         static std::condition_variable globalCV_;
+        static std::mutex global_mutex_;
 
         std::atomic<int> dropped_logs_;
         boost::lockfree::spsc_queue<lidarDecode::LidarDataFrame, boost::lockfree::capacity<16>> lidar_buffer_;
@@ -85,6 +86,8 @@ class SLAMPipeline {
         void runLioStateEstimation(const std::vector<int>& allowedCores);
         void runLoStateEstimation(const std::vector<int>& allowedCores);
         void runGroundTruthEstimation(const std::string& filename, const std::vector<int>& allowedCores);
+
+        void saveOdometryResults(const std::string& timestamp);
         
         // application for DynamicMapping
         // void runDynamicMapping(const std::vector<int>& allowedCores);
