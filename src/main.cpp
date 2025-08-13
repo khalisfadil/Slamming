@@ -3,13 +3,12 @@
 int main() {
     std::string lidar_json = "../json/2025047_1054_OS-2-128_122446000745.json";
     std::string config_json = "../config/odom_config.json";
-    uint32_t lidar_packet_size = 24896;
 
     // --- These could also be moved to a config file or command-line options ---
     const std::string udp_dest_all = "192.168.75.10";
     const uint16_t udp_port_gnss = 6597;
     const uint32_t id20_packet_size = 105;
-    uint32_t lidar_packet_size = 0; // Will be determined by profile
+    uint32_t lidar_packet_size = 24896; // Will be determined by profile
 
     // --- The rest of your setup logic ---
     std::string udp_profile_lidar;
@@ -134,7 +133,7 @@ int main() {
             // All threads have stopped. It is now 100% safe to access pipeline data.
             std::cout << "[Main] All threads joined. Saving final results..." << std::endl;
             pipeline.saveOdometryResults(timestamp); // Call the new safe method
-            
+
     } catch (const std::exception& e) {
         std::cerr << "Error: [Main] " << e.what() << std::endl;
         return EXIT_FAILURE;
