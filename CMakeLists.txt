@@ -239,6 +239,7 @@ set(GNSSKOMPASS_SOURCES
 
 set(FINALSTATEESTIMATION_SOURCES
     extern/FinalStateEstimation/src/odometry/lidarinertialodometry.cpp
+    extern/FinalStateEstimation/src/odometry/lidarodometry.cpp
 )
 
 set(SLAMMING_SOURCES

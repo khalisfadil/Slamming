@@ -64,8 +64,7 @@ class SLAMPipeline {
 
         boost::lockfree::spsc_queue<std::string, boost::lockfree::capacity<16>> log_queue_;
 
-        explicit SLAMPipeline(const std::string& odom_json_path, const std::string& lidar_json_path, const lidarDecode::OusterLidarCallback::LidarTransformPreset& T_preset); // Constructor with JSON file path
-    
+        explicit SLAMPipeline(const std::string& slam_registration, const std::string& odom_json_path, const std::string& lidar_json_path, const lidarDecode::OusterLidarCallback::LidarTransformPreset& T_preset);
         static void signalHandler(int signal);
         void setThreadAffinity(const std::vector<int>& coreIDs);
 
@@ -84,6 +83,7 @@ class SLAMPipeline {
         void dataAlignmentLocalIMU(const std::vector<int>& allowedCores);
         void dataAlignmentID20(const std::vector<int>& allowedCores);
         void runLioStateEstimation(const std::vector<int>& allowedCores);
+        void runLoStateEstimation(const std::vector<int>& allowedCores);
         void runGroundTruthEstimation(const std::string& filename, const std::vector<int>& allowedCores);
         
         // application for DynamicMapping

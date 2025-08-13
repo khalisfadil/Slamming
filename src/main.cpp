@@ -61,7 +61,9 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    SLAMPipeline pipeline(config_json, lidar_json, lidarDecode::OusterLidarCallback::LidarTransformPreset::GEHLSDORF20250410);
+    //"SLAM_LIDAR_ODOM" or "SLAM_LIDAR_INERTIAL_ODOM"
+    SLAMPipeline pipeline("SLAM_LIDAR_ODOM", config_json, lidar_json, 
+                            lidarDecode::OusterLidarCallback::LidarTransformPreset::GEHLSDORF20250410);
 
     struct sigaction sigIntHandler;
     sigIntHandler.sa_handler = SLAMPipeline::signalHandler;
@@ -122,7 +124,7 @@ int main() {
 
         threads.emplace_back([&]() { pipeline.processLogQueue(log_filename,std::vector<int>{3}); });
 
-        threads.emplace_back([&]() { pipeline.runLioStateEstimation(std::vector<int>{4,5,6,7,8,9,10,11}); });
+        threads.emplace_back([&]() { pipeline.runLoStateEstimation(std::vector<int>{4,5,6,7,8,9,10,11}); });
 
         threads.emplace_back([&]() { pipeline.runGroundTruthEstimation(gt_filename, std::vector<int>{12}); });
 
