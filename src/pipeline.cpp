@@ -1068,3 +1068,9 @@ void SLAMPipeline::runGroundTruthEstimation(const std::string& filename, const s
 }
 
 // -----------------------------------------------------------------------------
+
+void SLAMPipeline::saveOdometryResults(const std::string& timestamp) {
+    if (odometry_) {
+        odometry_->saveResults(timestamp);
+    }
+}
