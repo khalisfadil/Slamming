@@ -80,55 +80,61 @@ int main() {
 #endif
 
     try {
-        std::vector<std::thread> threads;
-        boost::asio::io_context ioContextPoints;
+            std::vector<std::thread> threads;
+            boost::asio::io_context ioContextPoints;
 
-        enum class LidarProfile { RNG19_RFL8_SIG16_NIR16, LEGACY, UNKNOWN };
-        LidarProfile profile;
-        if (udp_profile_lidar == "RNG19_RFL8_SIG16_NIR16") {
-            profile = LidarProfile::RNG19_RFL8_SIG16_NIR16;
-            lidar_packet_size = 24832;
-        } else if (udp_profile_lidar == "LEGACY") {
-            profile = LidarProfile::LEGACY;
-            lidar_packet_size = 24896;
-        } else {
-            profile = LidarProfile::UNKNOWN;
-        }
-
-        switch (profile) {
-            case LidarProfile::RNG19_RFL8_SIG16_NIR16:
-                threads.emplace_back([&]() { pipeline.runOusterLidarListenerSingleReturn(ioContextPoints, udp_dest_all, udp_port_lidar, lidar_packet_size, {0}); });
-                break;
-            case LidarProfile::LEGACY:
-                threads.emplace_back([&]() { pipeline.runOusterLidarListenerLegacy(ioContextPoints, udp_dest_all, udp_port_lidar, lidar_packet_size, {0}); });
-                break;
-            case LidarProfile::UNKNOWN:
-            default:
-                std::cerr << "[Main] Error: Unknown or unsupported udp_profile_lidar: " << udp_profile_lidar << std::endl;
-                return EXIT_FAILURE;
-        }
-
-        threads.emplace_back([&]() { pipeline.runGNSSID20Listener(ioContextPoints, udp_dest_all, udp_port_gnss, id20_packet_size, std::vector<int>{1}); });
-        threads.emplace_back([&]() { pipeline.dataAlignmentID20(std::vector<int>{2}); });
-        threads.emplace_back([&]() { pipeline.processLogQueue(log_filename,std::vector<int>{3}); });
-        threads.emplace_back([&]() { pipeline.runLoStateEstimation(std::vector<int>{4,5,6,7,8,9,10,11}); });
-        threads.emplace_back([&]() { pipeline.runGroundTruthEstimation(gt_filename, std::vector<int>{12}); });
-
-       // --- IMPROVEMENT 3: Use a condition variable for the main thread wait ---
-        // The current sleep loop is acceptable, but a CV is more efficient.
-        {
-            std::mutex cv_m;
-            std::unique_lock<std::mutex> lock(cv_m);
-            SLAMPipeline::globalCV_.wait(lock, []{ return !SLAMPipeline::running_.load(); });
-        }
-
-        ioContextPoints.stop();
-
-        for (auto& thread : threads) {
-            if (thread.joinable()) {
-                thread.join();
+            enum class LidarProfile { RNG19_RFL8_SIG16_NIR16, LEGACY, UNKNOWN };
+            LidarProfile profile;
+            if (udp_profile_lidar == "RNG19_RFL8_SIG16_NIR16") {
+                profile = LidarProfile::RNG19_RFL8_SIG16_NIR16;
+                lidar_packet_size = 24832;
+            } else if (udp_profile_lidar == "LEGACY") {
+                profile = LidarProfile::LEGACY;
+                lidar_packet_size = 24896;
+            } else {
+                profile = LidarProfile::UNKNOWN;
             }
-        }
+
+            switch (profile) {
+                case LidarProfile::RNG19_RFL8_SIG16_NIR16:
+                    threads.emplace_back([&]() { pipeline.runOusterLidarListenerSingleReturn(ioContextPoints, udp_dest_all, udp_port_lidar, lidar_packet_size, {0}); });
+                    break;
+                case LidarProfile::LEGACY:
+                    threads.emplace_back([&]() { pipeline.runOusterLidarListenerLegacy(ioContextPoints, udp_dest_all, udp_port_lidar, lidar_packet_size, {0}); });
+                    break;
+                case LidarProfile::UNKNOWN:
+                default:
+                    std::cerr << "[Main] Error: Unknown or unsupported udp_profile_lidar: " << udp_profile_lidar << std::endl;
+                    return EXIT_FAILURE;
+            }
+
+            threads.emplace_back([&]() { pipeline.runGNSSID20Listener(ioContextPoints, udp_dest_all, udp_port_gnss, id20_packet_size, std::vector<int>{1}); });
+            threads.emplace_back([&]() { pipeline.dataAlignmentID20(std::vector<int>{2}); });
+            threads.emplace_back([&]() { pipeline.processLogQueue(log_filename,std::vector<int>{3}); });
+            threads.emplace_back([&]() { pipeline.runLoStateEstimation(std::vector<int>{4,5,6,7,8,9,10,11}); });
+            threads.emplace_back([&]() { pipeline.runGroundTruthEstimation(gt_filename, std::vector<int>{12}); });
+
+        // --- IMPROVEMENT 3: Use a condition variable for the main thread wait ---
+            // The current sleep loop is acceptable, but a CV is more efficient.
+            {
+                std::mutex cv_m;
+                std::unique_lock<std::mutex> lock(cv_m);
+                SLAMPipeline::globalCV_.wait(lock, []{ return !SLAMPipeline::running_.load(); });
+            }
+
+            ioContextPoints.stop();
+
+            for (auto& thread : threads) {
+                if (thread.joinable()) {
+                    thread.join();
+                }
+            }
+
+            // --- SAFE SHUTDOWN POINT ---
+            // All threads have stopped. It is now 100% safe to access pipeline data.
+            std::cout << "[Main] All threads joined. Saving final results..." << std::endl;
+            pipeline.saveOdometryResults(timestamp); // Call the new safe method
+            
     } catch (const std::exception& e) {
         std::cerr << "Error: [Main] " << e.what() << std::endl;
         return EXIT_FAILURE;
