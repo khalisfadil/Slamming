@@ -1,99 +1,89 @@
-% MATLAB script to visualize SLAM trajectory and point cloud in 3D
-% Point cloud is in map frame; trajectory provides Tm2b (map-to-body transform)
+% MATLAB script to visualize raw SLAM trajectory and point cloud in 3D with large NED-aligned map axes
+% Point cloud and trajectory in map frame (NED: X=North, Y=East, Z=Down)
+% Tm2b: 4x4 transformation matrix from map (NED) to body frame
+% Map axes explicitly aligned with NED frame, no frame adjustments
 clear all; close all; clc;
 
 % --- File Paths ---
-% Replace with actual paths to your trajectory and point cloud files
-traj_file = 'trajectory_20250811_160505.txt'; % Example filename
-pc_file = 'map_20250811_160505.txt';          % Example filename
+pc_file = './traj/map_20250811_152722.txt'; % Point cloud file
+traj_file = './traj/trajectory_20250811_152722.txt'; % Trajectory file
 
 % --- Read Point Cloud ---
-% Format: x y z (map frame coordinates)
-point_cloud = load(pc_file); % Reads into Nx3 matrix [x, y, z]
-fprintf('Loaded %d points from point cloud file (map frame).\n', size(point_cloud, 1));
+% Format: x y z (map frame, NED: X=North, Y=East, Z=Down)
+try
+    point_cloud = load(pc_file); % Nx3 matrix [x, y, z]
+    if size(point_cloud, 2) ~= 3
+        error('Point cloud file must have 3 columns (x, y, z). Found %d columns.', size(point_cloud, 2));
+    end
+    fprintf('Loaded %d points from point cloud file (NED frame).\n', size(point_cloud, 1));
+catch e
+    error('Failed to load point cloud file: %s', e.message);
+end
 
 % --- Read Trajectory ---
-% Format: timestamp T(0,0) T(0,1) T(0,2) T(0,3) ... T(3,3) w(0) ... w(5)
-% Tm2b: 4x4 transform from map to body frame
-traj_data = load(traj_file);
-n_traj = size(traj_data, 1);
-fprintf('Loaded %d trajectory points.\n', n_traj);
-
-% Extract positions (Tm2b(1:3,4)) and rotations (Tm2b(1:3,1:3)) in map frame
-positions = zeros(n_traj, 3); % [x, y, z] in map frame
-rotations = zeros(3, 3, n_traj); % Rotation matrices (map to body)
-timestamps = traj_data(:, 1) * 1e-9; % Convert nanoseconds to seconds
-
-for i = 1:n_traj
-    % Extract 4x4 Tm2b (map-to-body transform, columns 2:17)
-    Tm2b = reshape(traj_data(i, 2:17), [4, 4])';
-    positions(i, :) = Tm2b(1:3, 4)'; % Body position in map frame
-    rotations(:, :, i) = Tm2b(1:3, 1:3); % Rotation: map to body
-    
-    % Validate rotation matrix (should be orthogonal, det ≈ 1)
-    R = rotations(:, :, i);
-    if norm(R' * R - eye(3), 'fro') > 1e-6 || abs(det(R) - 1) > 1e-6
-        warning('Invalid rotation matrix at index %d: not orthogonal or det ≠ 1', i);
+% Format: timestamp T(0,0)...T(3,3) w(0)...w(5) (23 columns)
+% Tm2b: 4x4 transform from map (NED: X=North, Y=East, Z=Down) to body frame
+try
+    traj_data = load(traj_file);
+    fprintf('Loaded %d trajectory points with %d columns.\n', size(traj_data, 1), size(traj_data, 2));
+    if size(traj_data, 2) < 17
+        error('Trajectory file has %d columns; expected at least 17 for Tm2b.', size(traj_data, 2));
     end
+catch e
+    error('Failed to load trajectory file: %s', e.message);
+end
+
+% --- Extract Trajectory Positions ---
+n_traj = size(traj_data, 1);
+positions = zeros(n_traj, 3); % [x, y, z] in map frame (NED)
+for i = 1:n_traj
+    % Extract 4x4 Tm2b (columns 2:17)
+    Tm2b = reshape(traj_data(i, 2:17), [4, 4])';
+    positions(i, :) = Tm2b(1:3, 4)'; % Body position in map frame (NED: X=North, Y=East, Z=Down)
 end
 
 % --- Create 3D Plot ---
-figure('Name', 'SLAM Trajectory and Point Cloud (Map Frame)', 'Position', [1200, 1200, 1200, 1200]);
+figure('Name', 'Raw SLAM Trajectory and Point Cloud with Large NED Map Axes', 'Position', [100, 100, 1200, 800]);
 hold on;
 
-% Plot point cloud (map frame, downsample if too dense)
-pc_plot = point_cloud;
+% Plot raw point cloud (no downsampling)
+h_pc = scatter3(point_cloud(:, 1), point_cloud(:, 2), point_cloud(:, 3), 2, 'b.', ...
+    'MarkerFaceAlpha', 0.3, 'DisplayName', 'Point Cloud (NED: X=North, Y=East, Z=Down)');
+fprintf('Plotted %d points (raw, no downsampling).\n', size(point_cloud, 1));
 
-scatter3(pc_plot(:, 1), pc_plot(:, 2), pc_plot(:, 3), 2, 'b.', 'MarkerFaceAlpha', 0.3, ...
-    'DisplayName', 'Point Cloud (Map Frame)');
-fprintf('Plotted %d points.\n', size(pc_plot, 1));
+% Plot raw trajectory
+h_traj = plot3(positions(:, 1), positions(:, 2), positions(:, 3), 'r-', 'LineWidth', 2, ...
+    'DisplayName', 'Trajectory (NED: X=North, Y=East, Z=Down)');
 
-% Plot trajectory as a line (positions in map frame)
-plot3(positions(:, 1), positions(:, 2), positions(:, 3), 'r-', 'LineWidth', 2, ...
-    'DisplayName', 'Trajectory (Map Frame)');
-
-% --- Plot Vehicle Axes in Map Frame ---
-% Tm2b rotation maps map-frame vectors to body frame, so apply R to body-frame unit vectors
-sample_interval = max(1, floor(n_traj / 20)); % Show ~20 sets of axes
-axis_length = 0.5; % Length of vehicle axes in meters (adjust as needed)
-for i = 1:sample_interval:n_traj
-    R = rotations(:, :, i); % Rotation: map to body
-    pos = positions(i, :); % Position in map frame
-    % Body-frame unit vectors (X, Y, Z)
-    x_body = [1; 0; 0]; y_body = [0; 1; 0]; z_body = [0; 0; 1];
-    % Transform to map frame: v_map = R' * v_body (since R is map-to-body)
-    x_map = R' * x_body * axis_length;
-    y_map = R' * y_body * axis_length;
-    z_map = R' * z_body * axis_length;
-    % Plot axes: X (red), Y (green), Z (blue)
-    quiver3(pos(1), pos(2), pos(3), x_map(1), x_map(2), x_map(3), ...
-        'r', 'LineWidth', 1.5, 'MaxHeadSize', 0.5, 'AutoScale', 'off', 'DisplayName', 'X-Axis');
-    quiver3(pos(1), pos(2), pos(3), y_map(1), y_map(2), y_map(3), ...
-        'g', 'LineWidth', 1.5, 'MaxHeadSize', 0.5, 'AutoScale', 'off', 'DisplayName', 'Y-Axis');
-    quiver3(pos(1), pos(2), pos(3), z_map(1), z_map(2), z_map(3), ...
-        'b', 'LineWidth', 1.5, 'MaxHeadSize', 0.5, 'AutoScale', 'off', 'DisplayName', 'Z-Axis');
-end
-
-% --- Optional: Annotate Trajectory Points ---
-% Add timestamp labels for first, middle, and last points
-label_indices = [1, floor(n_traj/2), n_traj];
-for i = label_indices
-    text(positions(i, 1), positions(i, 2), positions(i, 3), ...
-        sprintf('t=%.3fs', timestamps(i) - timestamps(1)), ...
-        'FontSize', 8, 'Color', 'k', 'VerticalAlignment', 'bottom');
-end
+% Plot large map axes at origin, aligned with NED frame
+map_axis_length = 10.0; % Large axis length (e.g., 10 meters for visibility)
+h_map_axes = gobjects(1, 3);
+% X-axis: North (+X), Red
+h_map_axes(1) = quiver3(0, 0, 0, map_axis_length, 0, 0, 'r', 'LineWidth', 3, ...
+    'MaxHeadSize', 0.8, 'AutoScale', 'off', 'DisplayName', 'Map X (North)');
+% Y-axis: East (+Y), Green
+h_map_axes(2) = quiver3(0, 0, 0, 0, map_axis_length, 0, 'g', 'LineWidth', 3, ...
+    'MaxHeadSize', 0.8, 'AutoScale', 'off', 'DisplayName', 'Map Y (East)');
+% Z-axis: Down (+Z), Blue
+h_map_axes(3) = quiver3(0, 0, 0, 0, 0, map_axis_length, 'b', 'LineWidth', 3, ...
+    'MaxHeadSize', 0.8, 'AutoScale', 'off', 'DisplayName', 'Map Z (Down)');
 
 % --- Plot Settings ---
 grid on;
-axis equal; % Equal scaling for all axes
-xlabel('X (m)');
-ylabel('Y (m)');
-zlabel('Z (m)');
-title('SLAM Trajectory and Point Cloud (Map Frame)');
-legend('Point Cloud', 'Trajectory', 'X-Axis (Body)', 'Y-Axis (Body)', 'Z-Axis (Body)', 'Location', 'best');
-view(3); % 3D view
+axis equal; % Equal scaling to preserve raw data proportions
+xlabel('X (North, m)');
+ylabel('Y (East, m)');
+zlabel('Z (Down, m)');
+title('Raw SLAM Trajectory and Point Cloud with Large NED-Aligned Map Axes');
+
+% Add legend
+legend([h_pc, h_traj, h_map_axes], 'Location', 'best', 'AutoUpdate', 'off');
+
+% Use default 3D view (no specific view angle)
+% view(3); % MATLAB's default 3D view (azimuth=37.5, elevation=30)
+% Keep MATLAB's default view without setting 'view'
+
 hold off;
 
 % --- Optional: Save Plot ---
-% Uncomment to save the figure as a PNG
-% saveas(gcf, 'slam_visualization.png');
+% saveas(gcf, 'raw_slam_visualization_with_large_ned_map_axes.png');
